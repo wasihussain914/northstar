@@ -8,6 +8,10 @@ follows from the one before it. A verdict is one of:
     caution  - it keeps every solution but adds extra ones (e.g. squaring)
     unknown  - SymPy couldn't decide; the caller falls back to Claude's judgment
 
+Algebra, trig, and precalculus stay in this file. Calculus, differential
+equations, linear algebra, and discrete math are dispatched to `domains`
+when the problem's syntax (or an explicit task) says so.
+
 Inputs are strings written by a model reading user handwriting, so they are
 untrusted: `parse_statement` whitelists characters and identifiers before
 anything reaches sympy's parser (which uses eval).
@@ -32,6 +36,56 @@ from sympy.parsing.sympy_parser import (
 Verdict = Literal["valid", "invalid", "caution", "unknown"]
 
 _TRANSFORMS = standard_transformations + (implicit_multiplication_application, convert_xor)
+
+
+def _diff(expr, *vars):
+    return sp.Derivative(expr, *vars)
+
+
+def _integrate(expr, var, a=None, b=None):
+    if a is None:
+        return sp.Integral(expr, var)
+    return sp.Integral(expr, (var, a, b))
+
+
+def _limit(expr, var, point):
+    return sp.Limit(expr, var, point, dir="+-")
+
+
+def _limleft(expr, var, point):
+    return sp.Limit(expr, var, point, dir="-")
+
+
+def _limright(expr, var, point):
+    return sp.Limit(expr, var, point, dir="+")
+
+
+def _summation(expr, var, a, b):
+    return sp.Sum(expr, (var, a, b))
+
+
+def _as_matrix(m):
+    if isinstance(m, sp.MatrixBase):
+        return m
+    return sp.Matrix(m)
+
+
+def _det(m):
+    return sp.Determinant(_as_matrix(m))
+
+
+def _inv(m):
+    return sp.Inverse(_as_matrix(m))
+
+
+def _grad(expr, *vars):
+    return sp.Matrix([sp.diff(expr, v) for v in vars])
+
+
+def _modinv(a, m):
+    return sp.Integer(sp.mod_inverse(a, m))
+
+
 _FUNCS = {
     "sqrt": sp.sqrt,
     "Abs": sp.Abs,
@@ -42,22 +96,56 @@ _FUNCS = {
     "sin": sp.sin,
     "cos": sp.cos,
     "tan": sp.tan,
+    "asin": sp.asin,
+    "acos": sp.acos,
+    "atan": sp.atan,
+    "arcsin": sp.asin,
+    "arccos": sp.acos,
+    "arctan": sp.atan,
+    "sec": sp.sec,
+    "csc": sp.csc,
+    "cot": sp.cot,
+    "sinh": sp.sinh,
+    "cosh": sp.cosh,
+    "tanh": sp.tanh,
     "pi": sp.pi,
     "E": sp.E,
+    "oo": sp.oo,
+    "inf": sp.oo,
+    "factorial": sp.factorial,
+    "binomial": sp.binomial,
+    "ceiling": sp.ceiling,
+    "floor": sp.floor,
+    "gcd": sp.gcd,
+    "Mod": sp.Mod,
+    "mod": sp.Mod,
+    "modinv": _modinv,
+    "diff": _diff,
+    "integrate": _integrate,
+    "limit": _limit,
+    "limleft": _limleft,
+    "limright": _limright,
+    "summation": _summation,
+    "Matrix": sp.Matrix,
+    "det": _det,
+    "inv": _inv,
+    "grad": _grad,
 }
 # Every single letter is a real-valued variable, so names like N, S, Q or I
 # never resolve to sympy objects.
 _SYMBOLS = {c: sp.Symbol(c, real=True) for c in string.ascii_letters if c != "E"}
 _LOCALS = {**_SYMBOLS, **_FUNCS}
 
-_ALLOWED_CHARS = re.compile(r"^[0-9A-Za-z+\-*/^().,=<>! ]+$")
+_ALLOWED_CHARS = re.compile(r"^[0-9A-Za-z+\-*/^().,=<>!%\[\]; ]+$")
 _IDENT = re.compile(r"[A-Za-z]+")
+_BANNED = re.compile(r"__|\b(for|lambda|import|exec|eval|open|class|def|while|yield|return|global)\b")
 _REL_SPLIT = re.compile(r"(<=|>=|!=|<|>|=)")
 _REL_CLASS = {"<": sp.StrictLessThan, ">": sp.StrictGreaterThan, "<=": sp.LessThan, ">=": sp.GreaterThan}
 
 _UNICODE = {
     "−": "-", "–": "-", "·": "*", "×": "*", "÷": "/", "√": "sqrt",
     "≤": "<=", "≥": ">=", "≠": "!=", "π": "pi", "²": "^2", "³": "^3",
+    "∞": "oo",
 }
 
 
@@ -69,8 +157,8 @@ class ParseError(ValueError):
 class Statement:
     """One parsed line of work."""
 
-    kind: Literal["eq", "ineq", "expr"]
-    lhs: sp.Expr
+    kind: Literal["eq", "ineq", "expr", "matrix"]
+    lhs: sp.Basic
     rhs: sp.Expr | None = None
     rel: str = "="
 
@@ -93,7 +181,36 @@ def _clean(text: str) -> str:
     return text.replace("==", "=").strip()
 
 
-def _parse_side(text: str) -> sp.Expr:
+def _rewrite(text: str) -> str:
+    """Turn student notation into names the parser can evaluate.
+
+    Single-letter calls like y(x) become applied unknown functions, so an ODE
+    can talk about y without y being a plain variable. C1, C2, ... are
+    arbitrary constants. A bare matrix literal is wrapped in Matrix().
+    """
+    for name in set(re.findall(r"\bC\d+\b", text)):
+        _LOCALS.setdefault(name, sp.Symbol(name, real=True))
+
+    def repl(match: re.Match) -> str:
+        name, args = match.group(1), match.group(2)
+        if name in _FUNCS:
+            return match.group(0)
+        if len(name) == 1 and name.isalpha():
+            key = f"_fn_{name}"
+            _LOCALS.setdefault(key, sp.Function(name))
+            return f"{key}({args})"
+        return match.group(0)
+
+    prev = None
+    while prev != text:
+        prev = text
+        text = re.sub(r"\b([A-Za-z]\w*)\(([^()]*)\)", repl, text)
+    if text.strip().startswith("[["):
+        text = f"Matrix({text.strip()})"
+    return text
+
+
+def _parse_side(text: str) -> sp.Basic:
     text = text.strip()
     if not text:
         raise ParseError("empty side")
@@ -102,6 +219,15 @@ def _parse_side(text: str) -> sp.Expr:
                           transformations=_TRANSFORMS, evaluate=True)
     except Exception as exc:  # sympy raises many error types on bad input
         raise ParseError(f"could not parse {text!r}: {exc}") from exc
+    if isinstance(expr, list):
+        try:
+            expr = sp.Matrix(expr)
+        except Exception as exc:
+            raise ParseError(f"not a matrix: {text!r}") from exc
+    if isinstance(expr, sp.MatrixBase):
+        if max(expr.shape) > 8:
+            raise ParseError("matrix is too large")
+        return expr
     if not isinstance(expr, sp.Expr):
         raise ParseError(f"not an expression: {text!r}")
     return expr
@@ -115,17 +241,11 @@ def _sympy_globals() -> dict:
     global _GLOBALS_CACHE
     if _GLOBALS_CACHE is None:
         _GLOBALS_CACHE = {name: getattr(sp, name) for name in
-                          ("Integer", "Float", "Rational", "Symbol", "Function", "Mul", "Add", "Pow")}
+                          ("Integer", "Float", "Rational", "Symbol", "Function", "Mul", "Add", "Pow", "Number")}
     return _GLOBALS_CACHE
 
 
-def parse_statement(text: str) -> Statement:
-    """Parse one line, e.g. '2*(x-3)+4 = 10', 'x > 3' or '3x + 6 - x'."""
-    text = _clean(text)
-    if not text or not _ALLOWED_CHARS.match(text):
-        raise ParseError(f"disallowed characters in {text!r}")
-    if re.search(r"\.\s*[A-Za-z_]", text):
-        raise ParseError("attribute access is not allowed")
+def _check_idents(text: str) -> None:
     for ident in _IDENT.findall(text):
         # implicit multiplication lets 'xy' mean x*y, so a run of letters is
         # fine as long as it isn't a function name we don't know.
@@ -136,15 +256,32 @@ def parse_statement(text: str) -> Statement:
         if len(ident) > 3:
             raise ParseError(f"unknown name {ident!r}")
 
+
+def parse_statement(text: str) -> Statement:
+    """Parse one line, e.g. '2*(x-3)+4 = 10', 'x > 3', 'diff(x^2, x)' or '[[1, 2], [3, 4]]'."""
+    text = _clean(text)
+    if not text or not _ALLOWED_CHARS.match(text):
+        raise ParseError(f"disallowed characters in {text!r}")
+    if re.search(r"\.\s*[A-Za-z_]", text) or _BANNED.search(text):
+        raise ParseError("attribute access is not allowed")
+    _check_idents(text)
+    text = _rewrite(text)
+
     parts = _REL_SPLIT.split(text)
     if len(parts) == 1:
-        return Statement("expr", _parse_side(parts[0]))
+        side = _parse_side(parts[0])
+        if isinstance(side, sp.MatrixBase):
+            return Statement("matrix", side)
+        return Statement("expr", side)
     if len(parts) == 3:
         lhs, op, rhs = parts
         if op == "!=":
             raise ParseError("'!=' is not supported")
+        left, right = _parse_side(lhs), _parse_side(rhs)
+        if isinstance(left, sp.MatrixBase) or isinstance(right, sp.MatrixBase):
+            raise ParseError("a matrix can't be part of a relation")
         kind = "eq" if op == "=" else "ineq"
-        return Statement(kind, _parse_side(lhs), _parse_side(rhs), op)
+        return Statement(kind, left, right, op)
     raise ParseError("more than one relation on a line")
 
 
@@ -173,12 +310,80 @@ def _numeric_zero(expr: sp.Expr, syms: list[sp.Symbol], trials: int = 6) -> bool
             continue
         if val != val or abs(val) == float("inf"):  # NaN / inf: outside the domain
             continue
-        if abs(val) > 1e-8 * max(1.0, abs(val)) and abs(val) > 1e-8:
+        if abs(val.imag) > 1e-8:  # branch cut, not evidence either way
+            continue
+        if abs(val.real) > 1e-8 * max(1.0, abs(val.real)) and abs(val.real) > 1e-8:
             return False
         seen += 1
         if seen >= trials:
             return True
     return None
+
+
+def _evaluate(expr: sp.Basic) -> sp.Basic:
+    """Compute derivatives, integrals, limits and determinants the student left written out."""
+    if isinstance(expr, sp.MatrixBase):
+        try:
+            return expr.applyfunc(lambda entry: entry.doit() if isinstance(entry, sp.Expr) else entry)
+        except Exception:
+            return expr
+    if isinstance(expr, sp.Expr):
+        try:
+            if expr.has(sp.Derivative, sp.Integral, sp.Limit, sp.Sum, sp.Determinant, sp.Inverse):
+                return expr.doit()
+        except Exception:
+            return expr
+    return expr
+
+
+def exprs_equal(a: sp.Basic, b: sp.Basic) -> bool | None:
+    """True if a and b are the same value, False if not, None if it can't be decided.
+
+    Tries cheap algebraic cancellation before trig and log identities, and
+    samples random points when the symbolic attempt is inconclusive.
+    """
+    a, b = _evaluate(a), _evaluate(b)
+    # oo - oo is NaN, so identical infinities have to be caught before subtraction.
+    # SymPy integers also compare equal to plain ints (the pigeonhole bound).
+    try:
+        if a == b:
+            return True
+    except Exception:
+        pass
+    if isinstance(a, sp.MatrixBase) or isinstance(b, sp.MatrixBase):
+        if isinstance(a, sp.MatrixBase) and isinstance(b, sp.MatrixBase) and a.shape == b.shape:
+            return bool(sp.simplify(a - b) == sp.zeros(*a.shape))
+        return False
+    if not isinstance(a, sp.Expr) or not isinstance(b, sp.Expr):
+        return None
+    diff = a - b
+    if diff == 0:
+        return True
+    try:
+        if sp.expand(diff) == 0 or sp.cancel(diff) == 0:
+            return True
+    except Exception:
+        pass
+    syms = sorted(diff.free_symbols, key=str)
+    numeric = _numeric_zero(diff, syms) if syms else None
+    # A log identity can look nonzero on the negative branch cut.
+    if numeric is False and not diff.has(sp.log):
+        return False
+    try:
+        if sp.simplify(diff) == 0 or sp.trigsimp(diff) == 0:
+            return True
+        if diff.has(sp.log) and sp.simplify(sp.expand_log(diff, force=True)) == 0:
+            return True
+    except Exception:
+        pass
+    if numeric is True:
+        return True
+    if not syms:
+        try:
+            return bool(sp.simplify(diff) == 0)
+        except Exception:
+            return None
+    return None if numeric is None else False
 
 
 def _contains_all(a: sp.FiniteSet, b: sp.FiniteSet) -> bool:
@@ -221,14 +426,16 @@ def _solution_set(stmt: Statement, var: sp.Symbol) -> sp.Set:
 
 def compare(prev: Statement, cur: Statement, target: sp.Symbol | None = None) -> StepCheck:
     """Does `cur` follow from `prev`?"""
+    if prev.kind == "matrix" or cur.kind == "matrix":
+        if prev.kind == cur.kind and prev.lhs.shape == cur.lhs.shape and prev.lhs == cur.lhs:
+            return StepCheck("valid")
+        return StepCheck("unknown")
+
     if prev.kind == "expr" and cur.kind == "expr":
-        diff = sp.expand(prev.lhs - cur.lhs)
-        if diff == 0:
+        same = exprs_equal(prev.lhs, cur.lhs)
+        if same is True:
             return StepCheck("valid")
-        zero = _numeric_zero(prev.lhs - cur.lhs, sorted(prev.free | cur.free, key=str))
-        if zero is True:
-            return StepCheck("valid")
-        if zero is False:
+        if same is False:
             return StepCheck("invalid", "this expression is not equal to the previous one",
                              "This isn't equal to the line above.")
         return StepCheck("unknown")
@@ -241,11 +448,14 @@ def compare(prev: Statement, cur: Statement, target: sp.Symbol | None = None) ->
     if prev.kind == "eq" and cur.kind == "eq":
         e1 = prev.lhs - prev.rhs
         e2 = cur.lhs - cur.rhs
-        if sp.expand(e1 - e2) == 0:
+        if exprs_equal(e1, e2) is True:
             return StepCheck("valid")
         if e2 != 0:
-            ratio = sp.simplify(e1 / e2)
-            if ratio.is_number and ratio != 0 and ratio.is_finite:
+            try:
+                ratio = sp.simplify(e1 / e2)
+            except Exception:
+                ratio = None
+            if ratio is not None and ratio.is_number and ratio != 0 and ratio.is_finite:
                 return StepCheck("valid")
 
     if len(syms) == 1:
@@ -313,14 +523,24 @@ def is_solved_form(stmt: Statement, target: sp.Symbol) -> bool:
 # Whole-board check
 # --------------------------------------------------------------------------
 
-def check_steps(problem: str | None, steps: list[tuple[int, str]], target: str | None) -> dict:
+def check_steps(problem: str | None, steps: list[tuple[int, str]], target: str | None,
+                task: str | None = None) -> dict:
     """Verify each step against the previous one.
 
     `steps` is [(line_number, sympy_text), ...] in board order; empty text means
-    the line couldn't be transcribed as math. Returns
-    {"results": {line: {"verdict", "detail", "note"}}, "arrived": bool}, where
-    `detail` is for Claude only and `note` is safe to show the student.
+    the line couldn't be transcribed as math. `task` is the tutor's label
+    (differentiate, integrate, ode, ...); when it's empty the problem syntax
+    decides. Returns {"results": {line: {"verdict", "detail", "note"}}, "arrived": bool},
+    where `detail` is for Claude only and `note` is safe to show the student.
     """
+    from domains import check_domain, resolve_task
+
+    resolved = resolve_task(problem or "", task)
+    if resolved not in ("solve", "simplify", ""):
+        advanced = check_domain(resolved, problem or "", list(steps), target)
+        if advanced is not None:
+            return advanced
+
     tsym = _SYMBOLS.get(target) if target and len(target) == 1 else None
     results: dict[int, dict] = {}
 
