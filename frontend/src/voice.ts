@@ -16,6 +16,58 @@ let serverTts = false;
 let player: HTMLAudioElement | null = null;
 let playUrl: string | null = null;
 
+/** What the voice is saying right now, for anything that wants to lip-sync or caption it. */
+export interface SpeechState {
+  speaking: boolean;
+  text: string;
+  /** True when the words are shown but not heard (voice off). */
+  silent: boolean;
+}
+
+type SpeechListener = (s: SpeechState) => void;
+const listeners = new Set<SpeechListener>();
+let speech: SpeechState = { speaking: false, text: "", silent: false };
+let endTimer: number | undefined;
+// Each utterance gets an id; a cancelled one's late "ended" event must not
+// stop the one that replaced it.
+let talkId = 0;
+
+function emit(next: SpeechState) {
+  speech = next;
+  for (const l of listeners) l(speech);
+}
+
+/** Subscribe to speech start/stop. Returns an unsubscribe function. */
+export function onSpeech(listener: SpeechListener): () => void {
+  listeners.add(listener);
+  listener(speech);
+  return () => listeners.delete(listener);
+}
+
+function startTalking(text: string, silent = false): number {
+  window.clearTimeout(endTimer);
+  const id = ++talkId;
+  emit({ speaking: true, text, silent });
+  // Not every engine reports the end of an utterance (and tests stub speech
+  // out), so stop on a timer sized to the text as a fallback.
+  endTimer = window.setTimeout(() => endTalk(id), Math.max(1800, text.length * (silent ? 70 : 85) + 1500));
+  return id;
+}
+
+function endTalk(id: number) {
+  if (id === talkId) stopTalking();
+}
+
+function stopTalking() {
+  window.clearTimeout(endTimer);
+  if (speech.speaking) emit({ ...speech, speaking: false });
+}
+
+/** Show words without speaking them, for when the voice is off. */
+export function caption(text: string) {
+  if (text) startTalking(text, true);
+}
+
 /** Tell the voice the server can speak (from /api/health). */
 export function setServerTts(on: boolean) {
   serverTts = on;
@@ -80,21 +132,24 @@ export function unlockSpeech() {
   a.play().catch(() => {});
 }
 
-function speakWithBrowser(text: string) {
+function speakWithBrowser(text: string, id: number) {
   if (!speechSupported) return;
   const u = new SpeechSynthesisUtterance(text);
   u.lang = locale;
   if (voice) u.voice = voice;
   u.rate = 1.02;
   u.pitch = 1.0;
+  u.onend = () => endTalk(id);
+  u.onerror = () => endTalk(id);
   window.speechSynthesis.speak(u);
 }
 
 export function speak(text: string) {
   if (!text) return;
   stopSpeaking();
+  const id = startTalking(text);
   if (!serverTts) {
-    speakWithBrowser(text);
+    speakWithBrowser(text, id);
     return;
   }
   fetch("/api/speak", {
@@ -111,12 +166,15 @@ export function speak(text: string) {
       if (playUrl) URL.revokeObjectURL(playUrl);
       playUrl = URL.createObjectURL(await res.blob());
       a.src = playUrl;
+      a.onplaying = () => window.clearTimeout(endTimer); // the audio's own end event takes over
+      a.onended = () => endTalk(id);
       return a.play();
     })
-    .catch(() => speakWithBrowser(text));
+    .catch(() => speakWithBrowser(text, id));
 }
 
 export function stopSpeaking() {
   if (speechSupported) window.speechSynthesis.cancel();
   if (player && !player.paused) player.pause();
+  stopTalking();
 }

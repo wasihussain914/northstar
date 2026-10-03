@@ -12,6 +12,7 @@ import { ProblemScanner, type ScannedProblem } from "./ProblemScanner";
 import { RoutePanel } from "./RoutePanel";
 import { TypeBar } from "./TypeBar";
 import { LANGUAGES, speechLocale, type Lang } from "./i18n";
+import { Mascot, type PipMood } from "./Mascot";
 import { useTrip } from "./useTrip";
 import { useTutor } from "./useTutor";
 import { setServerTts, setSpeechLang, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
@@ -390,6 +391,7 @@ export default function App() {
             <StatusPill tutor={tutor} arrived={arrived} onTap={() => setPanelOpen(true)} />
             <RecalcBanner errorKey={tutor.errorKey} line={tutor.errorLine} />
             <Starburst fireKey={arrived ? problem : ""} />
+            <Mascot mood={pipMood(tutor, arrived)} voiceOn={voiceOn} />
             {strokes.length === 0 && !planDismissed && !demoRunning && (
               <PlanCard
                 key={problem}
@@ -478,6 +480,16 @@ function pillTone(tutor: ReturnType<typeof useTutor>, arrived: boolean): PillTon
   if (tutor.errorLine != null) return "off";
   if (arrived) return "arrived";
   if (tutor.result && tutor.phase === "ready") return "on";
+  return "idle";
+}
+
+/** How Pip feels about the route right now. */
+function pipMood(tutor: ReturnType<typeof useTutor>, arrived: boolean): PipMood {
+  if (tutor.phase === "failed") return "dizzy";
+  if (arrived) return "party";
+  if (tutor.errorLine != null) return "worried";
+  if (tutor.phase === "checking") return "thinking";
+  if (tutor.result && tutor.phase === "ready") return "happy";
   return "idle";
 }
 
