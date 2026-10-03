@@ -249,6 +249,23 @@ async def problem(req: ProblemRequest) -> dict:
     return {"problems": problems}
 
 
+class PlanRequest(BaseModel):
+    problem: str = Field(default="", max_length=500)
+    plan: str = Field(min_length=1, max_length=1000)
+    lang: str = Field(default="en", max_length=8)
+
+
+@app.post("/api/plan")
+async def plan(req: PlanRequest) -> dict:
+    """Route preview: the student says how they'd solve it; the navigator judges the route."""
+    try:
+        out = await (fake_tutor if FAKE_VISION else tutor).check_plan(req.problem, req.plan, req.lang)
+    except tutor.TutorError as exc:
+        raise HTTPException(502, str(exc))
+    return {"verdict": out.get("verdict", "partial"), "feedback": out.get("feedback", ""),
+            "spoken": out.get("spoken", out.get("feedback", ""))}
+
+
 class PracticeRequest(BaseModel):
     problem: str = Field(default="", max_length=500)
     wrong_line: str = Field(default="", max_length=300)

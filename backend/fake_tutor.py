@@ -73,6 +73,19 @@ async def read_board(problem: str, transcript: dict[int, str] | None, lines: lis
     }
 
 
+async def check_plan(problem: str, plan: str, lang: str = "en") -> dict:
+    # Keyword-judged so the plan flow can be tested free.
+    text = plan.lower()
+    if any(w in text for w in ("distribute", "expand", "multiply out")):
+        return {"verdict": "good", "feedback": "That route gets you there. Drive it.",
+                "spoken": "That route gets you there. Drive it."}
+    if any(w in text for w in ("combine", "isolate", "both sides", "divide")):
+        return {"verdict": "partial", "feedback": "Right direction. What has to happen to the parentheses first?",
+                "spoken": "Right direction. What has to happen to the parentheses first?"}
+    return {"verdict": "off", "feedback": "That route won't reach it. Look at the parentheses: what undoes them?",
+            "spoken": "That route won't reach it. Look at the parentheses. What undoes them?"}
+
+
 async def practice_problem(problem: str, wrong_latex: str, note: str, lang: str = "en") -> dict:
     # A fixed twin of the flagship demo problem, so the detour flow tests free.
     return {"problem": "Solve 3(x - 2) + 5 = 14", "latex": "3(x - 2) + 5 = 14",

@@ -7,7 +7,7 @@ import { AskCard } from "./AskCard";
 import { DEMOS, runDemo } from "./demo";
 import { DestinationCard } from "./DestinationCard";
 import { RecalcBanner, Starburst } from "./Flashes";
-import { PracticeCard } from "./PracticeCard";
+import { PlanCard } from "./PlanCard";
 import { ProblemScanner, type ScannedProblem } from "./ProblemScanner";
 import { RoutePanel } from "./RoutePanel";
 import { TypeBar } from "./TypeBar";
@@ -130,14 +130,8 @@ export default function App() {
   // a wrong turn opens the drawer (hints live there), and so does arriving.
   const arrived = !!tutor.result?.arrived && tutor.phase === "ready";
 
-  // Remember this trip's wrong turn, so the detour-practice card can target it.
-  const [mistake, setMistake] = useState<{ line: number; latex: string; note: string } | null>(null);
-  useEffect(() => {
-    if (tutor.errorLine != null && tutor.result) {
-      const l = tutor.result.lines.find((x) => x.line === tutor.errorLine);
-      if (l) setMistake({ line: l.line, latex: l.latex, note: l.detail });
-    }
-  }, [tutor.errorKey, tutor.errorLine, tutor.result]);
+  // Route preview: ask for the whole plan while the paper is still blank.
+  const [planDismissed, setPlanDismissed] = useState(false);
   useEffect(() => {
     if (tutor.errorLine != null) setPanelOpen(true);
   }, [tutor.errorLine != null && tutor.errorKey]);
@@ -196,7 +190,7 @@ export default function App() {
   const newProblem = (p: string, s: { latex: string; image: string | null } | null = null) => {
     setProblem(p);
     setScan(s);
-    setMistake(null);
+    setPlanDismissed(false);
     dispatch({ type: "clear" });
     setSelectedLine(null);
     setPanelOpen(false);
@@ -393,6 +387,15 @@ export default function App() {
             <StatusPill tutor={tutor} arrived={arrived} onTap={() => setPanelOpen(true)} />
             <RecalcBanner errorKey={tutor.errorKey} line={tutor.errorLine} />
             <Starburst fireKey={arrived ? problem : ""} />
+            {strokes.length === 0 && !planDismissed && !demoRunning && (
+              <PlanCard
+                key={problem}
+                problem={problem}
+                lang={lang}
+                voiceOn={voiceOn}
+                onClose={() => setPlanDismissed(true)}
+              />
+            )}
             <div className="float-tools" role="toolbar" aria-label="Board tools">
               <ToolButton active={tool === "pen"} onClick={() => setTool("pen")} label="Pen (P)">
                 <path d="M4 16l1-4 8.5-8.5a2.1 2.1 0 013 3L8 15l-4 1z" />
@@ -451,15 +454,6 @@ export default function App() {
             onHint={handleHint}
             onNewTrip={advance}
             nextLabel={hasNextStop ? `Next stop · ${stopIndex + 2} of ${stops.length}` : "New problem"}
-            practiceCard={mistake && (
-              <PracticeCard
-                key={`${problem}|${mistake.line}`}
-                problem={problem}
-                mistake={mistake}
-                lang={lang}
-                onDrive={(t) => newProblem(t.problem, { latex: t.latex, image: null })}
-              />
-            )}
           >
             <AskCard problem={problem} strokes={strokes} result={tutor.result} voiceOn={voiceOn} lang={lang} />
           </RoutePanel>

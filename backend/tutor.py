@@ -412,6 +412,33 @@ async def read_problem(image_png_b64: str) -> dict:
     return await _structured(content, PROBLEM_SCHEMA, max_tokens=2000)
 
 
+PLAN_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "verdict": {"type": "string", "enum": ["good", "partial", "off"],
+                    "description": "good: the route reaches the destination; partial: right direction, something "
+                                   "missing or out of order; off: this route won't get there"},
+        "feedback": _str("At most two short, warm sentences reacting to the plan - guiding, never solving"),
+        "spoken": _str("The same feedback in plain spoken words, no symbols"),
+    },
+    "required": ["verdict", "feedback", "spoken"],
+    "additionalProperties": False,
+}
+
+PLAN_RULES = """Before writing anything, the student described their plan for solving the whole problem, like a \
+driver describing the route before pulling out. Judge the plan as a navigator would, without driving: verdict \
+good when the route reaches the destination, partial when it's the right direction but a step is missing, vague \
+or out of order, off when that route won't get there. feedback: at most two short, warm sentences — name what's \
+right about the route, and if something is missing, point at where to look without doing the step for them. \
+Never state the final answer or perform any algebra."""
+
+
+async def check_plan(problem: str, plan: str, lang: str = "en") -> dict:
+    prompt = (f"{PLAN_RULES}{lang_note(lang)}\n\nProblem: {problem or '(not given)'}\n\n"
+              f"The student's plan, in their own words: {plan}")
+    return await _structured(prompt, PLAN_SCHEMA, max_tokens=2000)
+
+
 PRACTICE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {

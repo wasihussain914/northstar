@@ -69,6 +69,11 @@ export function askTutor(req: {
   return post<{ answer: string }>("/api/ask", req);
 }
 
+/** Route preview: judge the student's plan for the whole problem. */
+export function checkPlan(req: { problem: string; plan: string; lang?: string }) {
+  return post<{ verdict: "good" | "partial" | "off"; feedback: string; spoken: string }>("/api/plan", req);
+}
+
 /** One fresh problem exercising the skill the student just got wrong. */
 export function practiceProblem(req: { problem: string; wrong_line: string; note: string; lang?: string }) {
   return post<{ problem: string; latex: string; skill: string }>("/api/practice", req);
