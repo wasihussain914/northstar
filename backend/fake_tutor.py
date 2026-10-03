@@ -40,8 +40,10 @@ async def read_board(problem: str, transcript: dict[int, str] | None, lines: lis
         "lines": out_lines,
         "first_error_line": 0,
         "hints": [],
+        "hint_ink": [],
         "spoken_nudge": "",
         "next_step_hint": "What could you do to both sides to get the variable on its own?",
+        "next_step_ink": "isolate the variable",
         "on_track_message": "Nice and steady.",
         "eta_steps": 2,
         "route_note": "",
@@ -56,6 +58,7 @@ async def explain_line(problem: str, lines: list[dict], line: int, detail: str, 
             note or "Check each term as you carry it down.",
             f"Rewrite line {line} so it's equivalent to line {line - 1}.",
         ],
+        "hint_ink": ["check each term", "carry it carefully", "rewrite this step"],
         "spoken_nudge": f"Recalculating. Take another look at line {line}.",
     }
 

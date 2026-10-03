@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { health } from "./api";
-import { Board, type Tool } from "./board/Board";
+import { Board, type TeacherInk, type Tool } from "./board/Board";
 import { LINES, lineOf, type Stroke } from "./board/geometry";
 import { textToStrokes } from "./board/handwriting";
 import { AskCard } from "./AskCard";
@@ -74,6 +74,33 @@ export default function App() {
 
   const tutor = useTutor(strokes, problem, voiceOn);
   const { trip, countHint } = useTrip(strokes, tutor);
+
+  // Red teacher pen. Not part of undo, and not sent to the tutor.
+  // Clears when the wrong turn changes, the problem changes, the board is
+  // cleared, or the student edits the line the note sits on.
+  const [teacherInk, setTeacherInk] = useState<TeacherInk | null>(null);
+  const inkAnchor = useRef("");
+  useEffect(() => {
+    setTeacherInk(null);
+  }, [tutor.errorKey, problem]);
+  useEffect(() => {
+    setTeacherInk((cur) => {
+      if (!cur) return null;
+      if (strokes.length === 0) return null;
+      const sig = tutor.lineKeys.get(cur.line) ?? "";
+      if (sig !== inkAnchor.current) return null;
+      return cur;
+    });
+  }, [strokes, tutor.lineKeys]);
+
+  const handleHint = (inkPhrase?: string, inkLine?: number) => {
+    countHint();
+    if (inkPhrase && inkLine != null) {
+      inkAnchor.current = tutor.lineKeys.get(inkLine) ?? "";
+      // New object every time so the board replays the pen stroke.
+      setTeacherInk({ phrase: inkPhrase, line: inkLine });
+    }
+  };
 
   useEffect(() => {
     health().then((h) => setHasKey(h ? h.has_key : null));
@@ -232,7 +259,7 @@ export default function App() {
 
       {hasKey === false && (
         <div className="banner">
-          No Anthropic API key on the server yet. Add <code>ANTHROPIC_API_KEY</code> to <code>backend/.env</code> and restart it.
+          No API key on the server yet. Add <code>ANTHROPIC_API_KEY</code> or <code>GEMINI_API_KEY</code> to <code>backend/.env</code> and restart it.
         </div>
       )}
 
@@ -265,6 +292,7 @@ export default function App() {
             markers={tutor.markers}
             errorLine={tutor.errorLine}
             selectedLine={selectedLine}
+            teacherInk={teacherInk}
             onAdd={(stroke) => dispatch({ type: "add", stroke })}
             onErase={(ids) => dispatch({ type: "erase", ids })}
             onSelectLine={onSelectLine}
@@ -282,7 +310,8 @@ export default function App() {
           onSelectLine={onSelectLine}
           voiceOn={voiceOn}
           trip={trip}
-          onHint={countHint}
+          lastInkLine={lastUsed || null}
+          onHint={handleHint}
           onNewTrip={() => newProblem(nextPreset(problem))}
         >
           <AskCard problem={problem} strokes={strokes} result={tutor.result} voiceOn={voiceOn} />

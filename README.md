@@ -49,18 +49,96 @@ Also:
 
 ## Run it
 
-You'll need Python 3.11+, [uv](https://docs.astral.sh/uv/), Node 20+, and an Anthropic API key.
+You'll need Python 3.11+, [uv](https://docs.astral.sh/uv/), Node 20+, and either an Anthropic API key or a Gemini (Google AI) API key.
 
 ```bash
-cp backend/.env.example backend/.env   # then put your key in backend/.env
-./dev.sh                               # API on :8000, app on :5173
+cp backend/.env.example backend/.env     # then put your key in backend/.env
+cp frontend/.env.example frontend/.env   # leave VITE_BACKEND_IP empty for localhost
+./dev.sh                                 # API on :8000, app on :5173
 ```
 
-Open http://localhost:5173 on this computer.
+On Windows PowerShell, skip `./dev.sh` and start the two processes yourself (see [Phone or iPad](#phone-or-ipad-same-wifi)).
 
-**On an iPad,** this computer stays the server. Safari opens the `Network:` URL Vite prints (`npm run dev` already listens on the LAN). Board checks are same-origin `/api` requests, and Vite proxies them to the API on this machine, so the iPad never calls port 8000. For a public HTTPS link (cellular, or the Ask North Star microphone), run `ngrok http 5173` and open that URL; do not put an ngrok host in the frontend. The Apple Pencil gets real pressure. A wide touch is ignored, a palm mark that lands before the pencil is discarded, and fingers stay ignored after the pencil has been used. Details are in [IPAD.md](IPAD.md).
+Set `ANTHROPIC_API_KEY` to use Claude, or `GEMINI_API_KEY` to use Gemini. If both keys are set, Claude is used unless `NORTHSTAR_PROVIDER=gemini`.
+
+Open **http://localhost:5173** on this computer. Leave `LOCAL_IP` and `VITE_BACKEND_IP` unset so the app and CORS stay on localhost. That is the teammate default.
 
 Shortcuts: `P` pen, `E` eraser, `⌘Z` / `⇧⌘Z` undo/redo. Right-click drag also erases.
+
+## Phone or iPad (same Wi-Fi)
+
+The phone or iPad is only a browser. This computer still runs the app, the API, and holds the API key.
+
+1. Find this computer's LAN IPv4 (`ipconfig` on Windows, `ip addr` on macOS/Linux). Use the Wi-Fi adapter. Skip virtual adapters (`172.*` from WSL or Hyper-V). Vite also prints it as `Network:` after `npm run dev`.
+2. Set **the same IP** in both env files, then restart the API and Vite (Vite only reads `VITE_*` at startup):
+
+```
+# backend/.env
+LOCAL_IP=192.168.1.42
+# FRONTEND_PORT=5173   # optional; this is the default
+
+# frontend/.env
+VITE_BACKEND_IP=192.168.1.42
+```
+
+The frontend then calls `http://192.168.1.42:8000`. CORS always allows `http://localhost:5173` and `http://127.0.0.1:5173`. With `LOCAL_IP` set, it also allows `http://192.168.1.42:5173`.
+
+3. Start both servers so they listen on the LAN (not only 127.0.0.1):
+
+```powershell
+cd backend
+uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+```powershell
+cd frontend
+npm run dev
+```
+
+Git Bash or macOS can use `./dev.sh` instead (`--host 0.0.0.0` is already in that script).
+
+Vite prints:
+
+```
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://192.168.1.42:5173/
+```
+
+4. On the phone or iPad, join the **same Wi-Fi** and open the **Network** URL in Safari (or Chrome), for example `http://192.168.1.42:5173`. Do not open `localhost` on the device — that is the device itself. Guest and campus networks often block device-to-device traffic; a phone hotspot with both devices joined works when venue Wi-Fi does not.
+
+If Windows Firewall prompts, allow Node and Python on private networks. If the device cannot connect and no prompt appeared:
+
+```powershell
+New-NetFirewallRule -DisplayName "North Star Vite" -Direction Inbound -Protocol TCP -LocalPort 5173 -Action Allow -Profile Private
+New-NetFirewallRule -DisplayName "North Star API" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow -Profile Private
+```
+
+Apple Pencil uses real pressure. The canvas keeps the pen pointer and drops the palm: a wide touch is ignored, and if the palm lands first its mark is discarded when the pencil touches. After the pencil has been used, fingers stay ignored. More iPad notes are in [IPAD.md](IPAD.md).
+
+- Plain `http://` is enough for drawing, typed steps, checks, and the spoken GPS replies. The microphone for Ask North Star needs HTTPS (see ngrok below).
+- Keep the computer awake and both processes running.
+- A Home Screen icon is only a bookmark; it breaks when this computer's IP changes.
+- Run the servers on Windows itself if the tablet is connecting to a Windows PC. A server inside WSL is often unreachable.
+
+## Off-network: ngrok
+
+Use [ngrok](https://ngrok.com/) when the phone is not on the same LAN, or when you need **HTTPS** (iOS only allows the Ask North Star microphone on HTTPS). The API key stays on this computer. Anyone with the public link can use your API quota until you stop ngrok. Do not put the URL in git.
+
+Install ngrok and add your auth token once (`ngrok config add-authtoken …`). Start the API and `npm run dev` on this computer, then in another terminal:
+
+```powershell
+ngrok http 5173
+```
+
+On the phone or iPad, open the `https://….ngrok-free.app` URL (the **Forwarding** line in the ngrok UI). That is the page only.
+
+Board checks still go to `http://<VITE_BACKEND_IP>:8000`. Tunneling **5173** does not proxy `/api`. For checks from another network you also need the API reachable, for example a second tunnel:
+
+```powershell
+ngrok http 8000
+```
+
+`VITE_BACKEND_IP` is a LAN IPv4 plus port 8000, not an `https://….ngrok-free.app` host, so same-Wi-Fi `LOCAL_IP` / `VITE_BACKEND_IP` is what makes checks work. ngrok on 5173 is the public HTTPS page (and the mic). Stop both tunnels when you are done.
 
 ## Tests
 

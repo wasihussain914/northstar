@@ -12,6 +12,7 @@ import {
   type Point,
   type Stroke,
 } from "./geometry";
+import { buildTeacherAnim, drawTeacherAnim, type TeacherAnim } from "./teacherPen";
 import { createInkContacts, notePointerDown, notePointerMove, notePointerUp } from "./palm";
 
 export type Tool = "pen" | "eraser";
@@ -21,12 +22,20 @@ export interface Marker {
   source?: "verified" | "ai";
 }
 
+/** A teacher-pen note to animate on the board. Set to null to clear. */
+export interface TeacherInk {
+  phrase: string;
+  line: number;
+}
+
 interface Props {
   strokes: Stroke[];
   tool: Tool;
   markers: Map<number, Marker>;
   errorLine: number | null;
   selectedLine: number | null;
+  /** When set, animates red teacher handwriting beside that line. */
+  teacherInk: TeacherInk | null;
   onAdd: (s: Stroke) => void;
   onErase: (ids: number[]) => void;
   onSelectLine: (line: number) => void;
@@ -34,8 +43,10 @@ interface Props {
 }
 
 const ERASER_R = 14;
+/** Duration of the teacher-pen reveal animation in milliseconds. */
+const TEACHER_ANIM_MS = 1100;
 
-export function Board({ strokes, tool, markers, errorLine, selectedLine, onAdd, onErase, onSelectLine, onInteract }: Props) {
+export function Board({ strokes, tool, markers, errorLine, selectedLine, teacherInk, onAdd, onErase, onSelectLine, onInteract }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(800);
@@ -48,6 +59,11 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, onAdd, 
   const activePointer = useRef<number | null>(null);
   const eraserPos = useRef<[number, number] | null>(null);
   const frame = useRef(0);
+
+  // Teacher ink animation state (refs so they don't re-trigger draw useCallback)
+  const teacherAnimRef = useRef<TeacherAnim | null>(null);
+  const teacherRevealRef = useRef(0);
+  const teacherRafRef = useRef(0);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -113,6 +129,13 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, onAdd, 
       ctx.fillStyle = "#171b26";
       ctx.fill(outlinePath(live.current.points, live.current.pen, false));
     }
+
+    // Red teacher annotation (drawn after student ink, excluded from snapshots)
+    const tAnim = teacherAnimRef.current;
+    if (tAnim && teacherRevealRef.current > 0) {
+      drawTeacherAnim(ctx, tAnim, teacherRevealRef.current);
+    }
+
     if (eraserPos.current) {
       const [x, y] = eraserPos.current;
       ctx.strokeStyle = "rgba(23, 27, 38, 0.45)";
@@ -135,6 +158,47 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, onAdd, 
   useEffect(() => {
     draw();
   }, [draw]);
+
+  // Animate teacher ink whenever the hint changes.
+  // We intentionally capture `strokes` and `boardW` at the moment teacherInk
+  // is set (i.e. when the student clicked "Give me a hint"), so the note is
+  // placed relative to the ink that was on screen at that instant.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    cancelAnimationFrame(teacherRafRef.current);
+    if (!teacherInk) {
+      teacherAnimRef.current = null;
+      teacherRevealRef.current = 0;
+      requestDraw();
+      return;
+    }
+
+    const anim = buildTeacherAnim(teacherInk.phrase, teacherInk.line, strokes, boardW);
+    teacherAnimRef.current = anim;
+    teacherRevealRef.current = 0;
+
+    if (!anim || anim.totalPoints === 0) {
+      requestDraw();
+      return;
+    }
+
+    const startTime = performance.now();
+    const tick = () => {
+      const elapsed = performance.now() - startTime;
+      const r = Math.min(
+        Math.round((elapsed / TEACHER_ANIM_MS) * anim.totalPoints),
+        anim.totalPoints,
+      );
+      teacherRevealRef.current = r;
+      requestDraw();
+      if (r < anim.totalPoints) {
+        teacherRafRef.current = requestAnimationFrame(tick);
+      }
+    };
+    teacherRafRef.current = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(teacherRafRef.current);
+  }, [teacherInk]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toPoint = (e: PointerEvent | React.PointerEvent, rect: DOMRect): Point => [
     (e.clientX - rect.left) / scale,

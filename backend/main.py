@@ -17,6 +17,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 load_dotenv(Path(__file__).with_name(".env"))
@@ -77,6 +78,28 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="North Star", lifespan=lifespan)
 
 
+def cors_origins() -> list[str]:
+    """Localhost is always allowed; a LAN IP is extra, for phones/tablets on Wi-Fi."""
+    port = os.environ.get("FRONTEND_PORT", "5173").strip() or "5173"
+    origins = [
+        f"http://localhost:{port}",
+        f"http://127.0.0.1:{port}",
+    ]
+    local_ip = os.environ.get("LOCAL_IP", "").strip()
+    if local_ip:
+        origins.append(f"http://{local_ip}:{port}")
+    return origins
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins(),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 class CheckRequest(BaseModel):
     problem: str = Field(default="", max_length=500)
     image: str = Field(description="PNG, base64 (a data: URL prefix is fine)", max_length=12_000_000)
@@ -130,8 +153,10 @@ def decode_png(data: str) -> tuple[str, bytes]:
 
 @app.get("/api/health")
 async def health() -> dict:
-    return {"ok": True, "has_key": FAKE_VISION or bool(os.environ.get("ANTHROPIC_API_KEY")),
-            "model": fake_tutor.MODEL if FAKE_VISION else tutor.MODEL, "fake": FAKE_VISION}
+    return {"ok": True, "has_key": FAKE_VISION or tutor.has_api_key(),
+            "model": fake_tutor.MODEL if FAKE_VISION else tutor.active_model(),
+            "provider": "fake" if FAKE_VISION else ("gemini" if tutor.using_gemini() else "claude"),
+            "fake": FAKE_VISION}
 
 
 @app.post("/api/check")
@@ -159,7 +184,9 @@ async def check(req: CheckRequest) -> dict:
     lines = merge(board, sym)
 
     first_error = next((l["line"] for l in lines if l["status"] == "error"), None)
-    hints, spoken = board.get("hints", []), board.get("spoken_nudge", "")
+    hints = board.get("hints", [])
+    hint_ink = board.get("hint_ink", [])
+    spoken = board.get("spoken_nudge", "")
     if first_error is not None and first_error != board.get("first_error_line"):
         # SymPy caught a wrong turn Claude didn't; get hints for that line.
         flagged = next(l for l in lines if l["line"] == first_error)
@@ -167,12 +194,14 @@ async def check(req: CheckRequest) -> dict:
             explained = await (fake_tutor if FAKE_VISION else tutor).explain_line(
                 req.problem, lines, first_error, flagged["_detail"], flagged["detail"])
             hints, spoken = explained["hints"], explained["spoken_nudge"]
+            hint_ink = explained.get("hint_ink", [])
         except tutor.TutorError:
             hints = [f"Take another look at line {first_error}. Does it really follow from the line above?",
                      flagged["detail"] or "Compare it carefully with the previous line.", ""]
             spoken = f"Recalculating. Take another look at line {first_error}."
+            hint_ink = ["compare with above", "check each term", ""]
     if first_error is None:
-        hints, spoken = [], ""
+        hints, spoken, hint_ink = [], "", []
 
     has_work = any(l["status"] not in ("skip", "pending") for l in lines)
     arrived = first_error is None and has_work and (
@@ -182,8 +211,10 @@ async def check(req: CheckRequest) -> dict:
         "lines": [{k: v for k, v in l.items() if not k.startswith("_")} for l in lines],
         "first_error": first_error,
         "hints": [h for h in hints if h][:3],
+        "hint_ink": [h for h in hint_ink if h][:3],
         "spoken_nudge": spoken,
         "next_step_hint": "" if first_error or arrived else board.get("next_step_hint", ""),
+        "next_step_ink": "" if first_error or arrived else board.get("next_step_ink", ""),
         "on_track_message": board.get("on_track_message", ""),
         "eta_steps": 0 if arrived else max(0, int(board.get("eta_steps", 0))),
         "route_note": board.get("route_note", ""),

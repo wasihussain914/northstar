@@ -2,14 +2,14 @@
 
 The iPad does not get a copy of this repo. It is the screen and the pencil. Your Windows PC stays the server: it runs the web app and the API, and it is the only machine that holds the API key.
 
-Safari on the iPad loads the page from the PC. Every board check is a normal web request back to that same PC. Vite on the PC forwards `/api` to the local API, so the iPad never talks to port 8000 and never sees `backend/.env`.
+Safari on the iPad loads the page from the PC. Board checks go to the API on this PC at port 8000. Set `VITE_BACKEND_IP` in `frontend/.env` and `LOCAL_IP` in `backend/.env` to the PC's LAN IPv4 so the iPad does not try `localhost` (which would mean the iPad itself). Leave both unset when you only use the app on the PC.
 
 ```
-iPad Safari  --Wi-Fi or tunnel-->  PC :5173 (Vite, npm run dev)
-                                      |
-                                      | proxy /api  (stays on the PC)
-                                      v
-                                   PC :8000 (FastAPI + SymPy + Claude/Gemini)
+iPad Safari  --Wi-Fi-->  PC :5173 (Vite, npm run dev)
+                 \
+                  \  /api  (http://<LOCAL_IP>:8000)
+                   v
+                PC :8000 (FastAPI + SymPy + Claude/Gemini)
 ```
 
 ## What to use when
@@ -30,18 +30,18 @@ Putting the Python or Node project on the iPad (Files, Working Copy, a-Shell, iS
 ### On the PC, once
 
 1. Install Python 3.11+, [uv](https://docs.astral.sh/uv/), and Node 20+.
-2. In `backend/`, copy `.env.example` to `.env` and set `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`.
-3. In `frontend/`, run `npm install` once.
+2. In `backend/`, copy `.env.example` to `.env` and set `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`. For iPad/phone testing, also set `LOCAL_IP` to this PC's LAN IPv4.
+3. In `frontend/`, copy `.env.example` to `.env` and set `VITE_BACKEND_IP` to that same IPv4. Run `npm install` once.
 
 ### On the PC, every time you demo
 
 Open two PowerShell windows in this repo.
 
-Window 1, the API (keep it on localhost; the iPad does not connect here):
+Window 1, the API (listen on the LAN so the iPad can reach port 8000):
 
 ```powershell
 cd backend
-uv run uvicorn main:app --port 8000 --reload
+uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Window 2, the web app (this is what the iPad opens). `npm run dev` already passes `--host`, so Vite listens on your LAN address and prints a `Network:` URL:
@@ -62,10 +62,11 @@ Use the **Network** line. `localhost` on the iPad means the iPad itself, not you
 
 If you use Git Bash, `./dev.sh` starts both. It will not work in PowerShell.
 
-If Windows Firewall asks, allow **Node** on **Private** networks. If no prompt appears and the iPad cannot connect, allow port 5173 on private networks only:
+If Windows Firewall asks, allow **Node** and **Python** on **Private** networks. If no prompt appears and the iPad cannot connect, allow ports 5173 and 8000 on private networks only:
 
 ```powershell
 New-NetFirewallRule -DisplayName "North Star Vite" -Direction Inbound -Protocol TCP -LocalPort 5173 -Action Allow -Profile Private
+New-NetFirewallRule -DisplayName "North Star API" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow -Profile Private
 ```
 
 Leave the PC awake and both windows running. A sleep or a closed terminal drops the iPad.
@@ -115,7 +116,7 @@ ngrok http 5173
 
 Start the API and `npm run dev` first, then the tunnel. On the iPad, open the `https://….trycloudflare.com` or `https://….ngrok…` URL in Safari.
 
-Point the tunnel at **5173**, not 8000. The page and `/api` are both served through Vite. Tunneling only the API leaves the iPad with nothing to draw on.
+A public tunnel to **5173** is not enough by itself: the page calls the API at `http://<VITE_BACKEND_IP>:8000`. Same-network testing should set that IP (and `LOCAL_IP` on the API). Tunneling only the API leaves the iPad with nothing to draw on.
 
 HTTPS is what unlocks the microphone for Ask North Star. Spoken GPS replies (`speechSynthesis`) already work on the plain LAN `http://` URL.
 
