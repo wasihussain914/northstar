@@ -31,8 +31,12 @@ Built for Cornell Hacks 2026 (theme: **Navigation**).
 - **Claude reads, SymPy proves.** Claude transcribes the handwriting; when a step is wrong, a second, smaller
   Claude call writes the hints. Whether a step is
   correct is decided by SymPy where it can: for equations it compares solution sets, for expressions it checks
-  that they're equal. Steps SymPy can't decide fall back to Claude's judgment and are labeled "AI-checked"
-  instead of "verified".
+  that they're equal (including trig and log identities). The same checker also covers calculus (derivatives,
+  integrals, limits, gradients), ODEs and PDEs (by plugging a proposed solution back in), linear algebra
+  (determinants, inverses, row reduction), sums, number theory (Euclid, congruences, modular inverses),
+  algebraic and induction proofs, the pigeonhole principle, and balancing a chemical equation. Physics that
+  is a differential equation, such as constant acceleration, uses the ODE check. Steps SymPy can't decide fall
+  back to Claude's judgment and are labeled "AI-checked" instead of "verified".
 - **First wrong turn, not every wrong line.** A line that correctly carries an earlier mistake forward is still
   on route. Only the line where the mistake was made gets the 📍.
 - **The voice speaks up like a GPS.** It stays quiet while you work. It speaks once you've written past the

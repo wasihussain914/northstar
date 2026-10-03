@@ -37,9 +37,10 @@ class SympyPool:
     def __init__(self) -> None:
         self._pool = ProcessPoolExecutor(max_workers=2)
 
-    async def check(self, problem: str, steps: list[tuple[int, str]], target: str) -> dict | None:
+    async def check(self, problem: str, steps: list[tuple[int, str]], target: str,
+                    task: str = "") -> dict | None:
         loop = asyncio.get_running_loop()
-        future = loop.run_in_executor(self._pool, verify.check_steps, problem, steps, target)
+        future = loop.run_in_executor(self._pool, verify.check_steps, problem, steps, target, task)
         try:
             return await asyncio.wait_for(future, SYMPY_TIMEOUT_S)
         except asyncio.TimeoutError:
@@ -155,7 +156,8 @@ async def check(req: CheckRequest) -> dict:
 
     steps = [(l["line"], l["sympy"]) for l in sorted(board["lines"], key=lambda l: l["line"])
              if l["kind"] not in SKIP_KINDS and l["kind"] != "incomplete"]
-    sym = await sympy_pool.check(board.get("problem_sympy", ""), steps, board.get("target_variable", ""))
+    sym = await sympy_pool.check(board.get("problem_sympy", ""), steps, board.get("target_variable", ""),
+                                 board.get("task") or "")
     lines = merge(board, sym)
 
     first_error = next((l["line"] for l in lines if l["status"] == "error"), None)

@@ -37,6 +37,7 @@ async def read_board(problem: str, transcript: dict[int, str] | None, lines: lis
     return {
         "problem_sympy": math,
         "target_variable": target,
+        "task": "",
         "lines": out_lines,
         "next_step_hint": "What could you do to both sides to get the variable on its own?",
         "on_track_message": "Nice and steady.",
