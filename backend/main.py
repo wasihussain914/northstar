@@ -249,6 +249,26 @@ async def problem(req: ProblemRequest) -> dict:
     return {"problems": problems}
 
 
+class PracticeRequest(BaseModel):
+    problem: str = Field(default="", max_length=500)
+    wrong_line: str = Field(default="", max_length=300)
+    note: str = Field(default="", max_length=500)
+    lang: str = Field(default="en", max_length=8)
+
+
+@app.post("/api/practice")
+async def practice(req: PracticeRequest) -> dict:
+    """A detour: one fresh problem exercising the skill the student just got wrong."""
+    try:
+        out = await (fake_tutor if FAKE_VISION else tutor).practice_problem(
+            req.problem, req.wrong_line, req.note, req.lang)
+    except tutor.TutorError as exc:
+        raise HTTPException(502, str(exc))
+    if not out.get("problem"):
+        raise HTTPException(422, "Couldn't chart a detour for that one.")
+    return {"problem": out["problem"], "latex": out.get("latex", ""), "skill": out.get("skill", "")}
+
+
 class AskRequest(BaseModel):
     problem: str = Field(default="", max_length=500)
     question: str = Field(min_length=1, max_length=500)

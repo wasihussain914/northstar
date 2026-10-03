@@ -73,6 +73,12 @@ async def read_board(problem: str, transcript: dict[int, str] | None, lines: lis
     }
 
 
+async def practice_problem(problem: str, wrong_latex: str, note: str, lang: str = "en") -> dict:
+    # A fixed twin of the flagship demo problem, so the detour flow tests free.
+    return {"problem": "Solve 3(x - 2) + 5 = 14", "latex": "3(x - 2) + 5 = 14",
+            "skill": "distribute, then combine"}
+
+
 async def read_problem(image_png_b64: str) -> dict:
     # No vision here; hand back a known worksheet so the capture and trip flows
     # can be tested free.

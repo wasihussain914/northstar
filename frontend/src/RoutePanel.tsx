@@ -24,10 +24,12 @@ interface Props {
   onNewTrip: () => void;
   /** Button label on the trip summary ("New problem", "Next stop · 2 of 4"). */
   nextLabel?: string;
+  /** Detour-practice card, shown with the trip summary. */
+  practiceCard?: React.ReactNode;
   children?: React.ReactNode;
 }
 
-export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, lastInkLine, onHint, onNewTrip, nextLabel, children }: Props) {
+export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, lastInkLine, onHint, onNewTrip, nextLabel, practiceCard, children }: Props) {
   const { result, errorLine, errorKey, phase, failure } = tutor;
   const [hintsShown, setHintsShown] = useState(0);
   const [showNext, setShowNext] = useState(false);
@@ -60,6 +62,7 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
       />
 
       {trip.durationMs != null && <TripSummary trip={trip} onNewTrip={onNewTrip} nextLabel={nextLabel ?? "New problem"} />}
+      {trip.durationMs != null && practiceCard}
 
       {errorLine != null && result && result.hints.length > 0 && (
         <section className="card hint-card">

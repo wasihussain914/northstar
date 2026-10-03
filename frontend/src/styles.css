@@ -1264,6 +1264,42 @@ canvas.ink.tool-eraser {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------- Detour practice ---------- */
+
+.practice {
+  border-color: rgba(110, 168, 255, 0.35);
+}
+
+.practice-lead {
+  margin: 0 0 10px;
+  color: var(--muted);
+}
+
+.skill-chip {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--blue);
+  background: rgba(110, 168, 255, 0.12);
+  border: 1px solid rgba(110, 168, 255, 0.4);
+  border-radius: 999px;
+  padding: 3px 10px;
+  margin-bottom: 8px;
+}
+
+.practice-problem {
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+
+.practice-error {
+  margin: 8px 0 0;
+  color: var(--red);
+  font-size: 13px;
+}
+
 /* ---------- Ask ---------- */
 
 .ask-log {

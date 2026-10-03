@@ -69,6 +69,11 @@ export function askTutor(req: {
   return post<{ answer: string }>("/api/ask", req);
 }
 
+/** One fresh problem exercising the skill the student just got wrong. */
+export function practiceProblem(req: { problem: string; wrong_line: string; note: string; lang?: string }) {
+  return post<{ problem: string; latex: string; skill: string }>("/api/practice", req);
+}
+
 /** Read the problem(s) off a cropped photo of homework. */
 export function readProblem(image: string) {
   return post<{ problems: { problem: string; latex: string }[] }>("/api/problem", { image });

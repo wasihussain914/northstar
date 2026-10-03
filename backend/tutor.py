@@ -412,6 +412,31 @@ async def read_problem(image_png_b64: str) -> dict:
     return await _structured(content, PROBLEM_SCHEMA, max_tokens=2000)
 
 
+PRACTICE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "problem": _str("One new practice problem as one short line of plain text, same style as the original"),
+        "latex": _str("Just the math as LaTeX (no surrounding $)"),
+        "skill": _str("2-5 word name of the skill the mistake was about, e.g. 'distributing a negative'"),
+    },
+    "required": ["problem", "latex", "skill"],
+    "additionalProperties": False,
+}
+
+PRACTICE_RULES = """The student just finished a problem where they took a wrong turn, caught it, and fixed it. \
+Invent exactly ONE new practice problem that exercises the same skill they got wrong: same type and about the \
+same difficulty as the original, but different numbers, a different answer, and ideally a slightly different \
+shape so the skill transfers. Keep the instruction word ("Solve", "Differentiate", ...). Also name the skill in \
+a few words. Do not include the answer or any solution steps anywhere."""
+
+
+async def practice_problem(problem: str, wrong_latex: str, note: str, lang: str = "en") -> dict:
+    prompt = (f"{PRACTICE_RULES}{lang_note(lang)}\n\nOriginal problem: {problem or '(not given)'}\n"
+              f"The wrong line they wrote: {wrong_latex or '(unknown)'}\n"
+              f"What went wrong there: {note or '(not recorded)'}")
+    return await _structured(prompt, PRACTICE_SCHEMA, max_tokens=2000)
+
+
 ASK_INSTRUCTIONS = """The student just asked you a question out loud while working. Answer it as North Star: \
 in at most three short sentences, warm and concrete, guiding rather than solving. Never state the final answer, \
 even if asked directly; offer the next nudge instead. Your answer will be read aloud by a speech synthesizer, so \

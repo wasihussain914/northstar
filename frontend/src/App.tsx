@@ -7,6 +7,7 @@ import { AskCard } from "./AskCard";
 import { DEMOS, runDemo } from "./demo";
 import { DestinationCard } from "./DestinationCard";
 import { RecalcBanner, Starburst } from "./Flashes";
+import { PracticeCard } from "./PracticeCard";
 import { ProblemScanner, type ScannedProblem } from "./ProblemScanner";
 import { RoutePanel } from "./RoutePanel";
 import { TypeBar } from "./TypeBar";
@@ -128,6 +129,15 @@ export default function App() {
   // Like a GPS, surface the detail when something needs attention:
   // a wrong turn opens the drawer (hints live there), and so does arriving.
   const arrived = !!tutor.result?.arrived && tutor.phase === "ready";
+
+  // Remember this trip's wrong turn, so the detour-practice card can target it.
+  const [mistake, setMistake] = useState<{ line: number; latex: string; note: string } | null>(null);
+  useEffect(() => {
+    if (tutor.errorLine != null && tutor.result) {
+      const l = tutor.result.lines.find((x) => x.line === tutor.errorLine);
+      if (l) setMistake({ line: l.line, latex: l.latex, note: l.detail });
+    }
+  }, [tutor.errorKey, tutor.errorLine, tutor.result]);
   useEffect(() => {
     if (tutor.errorLine != null) setPanelOpen(true);
   }, [tutor.errorLine != null && tutor.errorKey]);
@@ -186,6 +196,7 @@ export default function App() {
   const newProblem = (p: string, s: { latex: string; image: string | null } | null = null) => {
     setProblem(p);
     setScan(s);
+    setMistake(null);
     dispatch({ type: "clear" });
     setSelectedLine(null);
     setPanelOpen(false);
@@ -440,6 +451,15 @@ export default function App() {
             onHint={handleHint}
             onNewTrip={advance}
             nextLabel={hasNextStop ? `Next stop · ${stopIndex + 2} of ${stops.length}` : "New problem"}
+            practiceCard={mistake && (
+              <PracticeCard
+                key={`${problem}|${mistake.line}`}
+                problem={problem}
+                mistake={mistake}
+                lang={lang}
+                onDrive={(t) => newProblem(t.problem, { latex: t.latex, image: null })}
+              />
+            )}
           >
             <AskCard problem={problem} strokes={strokes} result={tutor.result} voiceOn={voiceOn} lang={lang} />
           </RoutePanel>
