@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 load_dotenv(Path(__file__).with_name(".env"))
@@ -324,3 +325,10 @@ async def ask(req: AskRequest) -> dict:
                                                                 req.context, req.lang)
     except tutor.TutorError as exc:
         raise HTTPException(502, str(exc))
+
+
+# Serve the built frontend (frontend/dist) when it exists, so one process can
+# host the whole app for deploys. API routes above take precedence.
+_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if _DIST.is_dir():
+    app.mount("/", StaticFiles(directory=_DIST, html=True), name="app")
