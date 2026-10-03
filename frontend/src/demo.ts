@@ -37,6 +37,17 @@ export const DEMOS: DemoScript[] = [
     ],
   },
   {
+    problem: "Differentiate x³ − 3x² + 2x",
+    steps: [
+      { do: "write", line: 1, text: "3x^2 - 6x" }, // the wrong turn: dropped the + 2
+      { do: "until", what: "error" },
+      { do: "pause", ms: 4000 },
+      { do: "erase", line: 1 },
+      { do: "write", line: 1, text: "3x^2 - 6x + 2" },
+      { do: "until", what: "arrived" },
+    ],
+  },
+  {
     problem: "Solve −2x + 4 > 10",
     steps: [
       { do: "write", line: 1, text: "-2x > 6" },

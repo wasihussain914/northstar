@@ -18,18 +18,27 @@ teleported to the destination: you arrive, but you never learn the route.
 | Shows the route and ETA | Route panel: each step as a stop, an estimate of how many steps remain, shortcuts spotted |
 | "You have arrived" | Trip summary: steps, wrong turns caught, hints used, time |
 
-Tracks: **Wayfinding** (navigating a solution space) and **Accessibility** (a voice-first tutor, for anyone without a tutor at
-their kitchen table).
+| Enter a destination | Photograph your homework; the problem Claude reads becomes the destination card |
+| A route with multiple stops | Scan a worksheet: every problem is a stop, with itinerary dots and "Next stop · 2 of 4" |
+| Guidance in your language | Hints and the voice itself in English, Español, Français, 中文, हिन्दी, বাংলা |
+
+Tracks: **Wayfinding** (navigating a solution space) and **Accessibility** (a voice-first tutor in six languages, for anyone
+without a tutor at their kitchen table — "regardless of language", as the prompt says).
+
+Opening line, stolen from the theme announcement itself: *"Before Google Maps, we navigated by the stars."* That's the name.
 
 ## Demo (2 min)
-1. **Set up (10s).** "Here's a problem: 2(x − 3) + 4 = 10. I'll just solve it on the board." Write on the iPad.
+1. **Set up (10s).** Tap **Scan homework**, photograph the worksheet, box problem 3 — it becomes the destination,
+   pinned above the paper as a crop of the actual homework. (Fallback: pick the preset chip.)
 2. **Wrong turn (30s).** Write `2x − 6 + 4 = 10`, then deliberately `2x + 2 = 10`, then keep going: `2x = 8`.
    → Line 2 gets an amber pin, the route turns dashed, and the voice says *"Recalculating…"*. Point out that line 3 is still
    green: North Star knows it correctly follows from the mistake. **Only the wrong turn is flagged.**
 3. **Hint ladder (20s).** Tap "Give me a hint" once. It points at where to look, not the answer.
 4. **Ask by voice (15s).** Tap the mic: "Why is line 2 wrong?" It answers out loud in plain words.
 5. **Fix it (25s).** Erase and rewrite line 2. North Star notices line 3 now needs updating. Fix it, write `x = 6`.
-   → *"You have arrived."* Trip summary appears.
+   → *"You have arrived."* Trip summary appears — with **Next stop · 2 of 2** if you scanned the whole worksheet.
+   If there's time: flip the language picker to Español and ask "why was line 2 wrong?" — the answer comes back
+   spoken in Spanish.
 6. **How it works (20s).** "Claude reads the handwriting. **SymPy proves** each step, so a green check marked 'verified'
    means mathematically equivalent, not just 'looks right' to an AI."
 
@@ -51,4 +60,4 @@ Backup: if the iPad or Wi-Fi misbehaves, hit **▶ Demo** to replay the same sol
 
 ## What's next
 Camera mode for physical whiteboards, calculus (derivative steps checked with SymPy too), classroom view for teachers
-(where does the class go off route most?), multi-language voice.
+(where does the class go off route most?).

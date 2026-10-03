@@ -9,24 +9,34 @@ Built for Cornell Hacks 2026 (theme: **Navigation**).
 ## How it works
 
 ```
- you write ──▶ pause ~1.2s ──▶ board snapshot (lines labeled 1, 2, 3…)
+ 📷 scan homework (photo or PDF) ──▶ box the problem ──▶ Claude reads it
+                                   │            = your destination
+                                   ▼
+ you write ──▶ new line? ~0.35s / pause ~1.2s ──▶ board snapshot (lines labeled 1, 2, 3…)
                                    │
                                    ▼
                      Claude Sonnet 5.5 (vision) reads each line 
-                     → LaTeX + SymPy syntax + hints
+                     → LaTeX + SymPy syntax
                                    │
                                    ▼
                      SymPy checks each step against the one before
                      (equivalent? lost a root? flipped inequality?)
                                    │
+                     wrong turn? → a second, smaller Claude call
+                                   writes the hint ladder
                                    ▼
           gutter markers ✓ 📍 ⚠ · route panel · GPS voice · hint ladder
 ```
 
-- **Claude reads, SymPy proves.** Claude transcribes the handwriting and writes the hints. Whether a step is
+- **Claude reads, SymPy proves.** Claude transcribes the handwriting; when a step is wrong, a second, smaller
+  Claude call writes the hints. Whether a step is
   correct is decided by SymPy where it can: for equations it compares solution sets, for expressions it checks
-  that they're equal. Steps SymPy can't decide fall back to Claude's judgment and are labeled "AI-checked"
-  instead of "verified".
+  that they're equal (including trig and log identities). The same checker also covers calculus (derivatives,
+  integrals, limits, gradients), ODEs and PDEs (by plugging a proposed solution back in), linear algebra
+  (determinants, inverses, row reduction), sums, number theory (Euclid, congruences, modular inverses),
+  algebraic and induction proofs, the pigeonhole principle, and balancing a chemical equation. Physics that
+  is a differential equation, such as constant acceleration, uses the ODE check. Steps SymPy can't decide fall
+  back to Claude's judgment and are labeled "AI-checked" instead of "verified".
 - **First wrong turn, not every wrong line.** A line that correctly carries an earlier mistake forward is still
   on route. Only the line where the mistake was made gets the 📍.
 - **The voice speaks up like a GPS.** It stays quiet while you work. It speaks once you've written past the
@@ -36,6 +46,17 @@ Built for Cornell Hacks 2026 (theme: **Navigation**).
   gives the final answer.
 
 Also:
+- **Scan your homework.** Take a photo of the worksheet (or open a photo/PDF), drag a box around the problem
+  you're on, and Claude reads it into the destination card — the crop of your actual homework stays pinned above
+  the paper while you work. Multi-page PDFs have page arrows; editing the transcription by hand is one tap.
+- **Trips with stops.** Scan a whole worksheet and every problem Claude finds becomes a stop on one trip:
+  itinerary dots on the destination card, "Next stop · 2 of 4" when you arrive, jump between stops by tapping
+  the dots.
+- **Six languages.** Pick Español, Français, 中文, हिन्दी or বাংলা and the guidance — hints, spoken nudges,
+  encouragement, Ask answers, the GPS voice itself — switches to that language. The math and the checking don't
+  change (Accessibility track: navigation "regardless of language").
+- **Checkpoints.** The moment you start a new line, the line you just finished is checked (~0.35s), so wrong
+  turns surface while your pen is still moving. A ~1.2s pause checks everything else.
 - **Ask North Star.** Tap the mic (or type) to ask "why is line 2 wrong?". Claude sees the board and the last
   check, and answers out loud in at most three sentences, never with the final answer.
 - **Trip summary** on arrival: steps, wrong turns (stale lines after a fix don't count), hints used, time.
@@ -155,10 +176,11 @@ are plain templates. Hand-drawn strokes can't be read in this mode.
 | Path | What |
 |---|---|
 | `backend/verify.py` | SymPy step checker (sanitized parsing, equivalence, lost/extra solutions) |
-| `backend/tutor.py` | Claude calls: read the board, explain a SymPy-flagged line |
-| `backend/main.py` | FastAPI: `/api/check` merges both; SymPy runs in killable worker processes |
+| `backend/tutor.py` | Claude calls: read the board, explain a flagged line, read a scanned problem |
+| `backend/main.py` | FastAPI: `/api/check` merges both, `/api/problem` reads a homework crop; SymPy runs in killable worker processes |
 | `frontend/src/board/` | Ruled whiteboard canvas, stroke → line mapping, the labeled snapshot sent to Claude |
-| `frontend/src/useTutor.ts` | Pause detection, request handling, the voice policy |
+| `frontend/src/ProblemScanner.tsx` | Photo/PDF import and the crop-the-problem sheet |
+| `frontend/src/useTutor.ts` | Checkpoint & pause detection, request handling, the voice policy |
 | `frontend/src/RoutePanel.tsx` | Status, hint ladder, route view |
 
 Dev helper (in the browser console while running `npm run dev`):

@@ -3,10 +3,13 @@ import { checkBoard, type CheckResult } from "./api";
 import type { Marker } from "./board/Board";
 import { lineSignatures, snapshot, type Stroke } from "./board/geometry";
 import { typedTranscript } from "./board/handwriting";
+import { PHRASES, type Lang } from "./i18n";
 import { speak } from "./voice";
 
 /** How long the pen must rest before we look at the board. */
 const PAUSE_MS = 1200;
+/** Moving on to a fresh line means the one above is done: check it almost at once. */
+const CHECKPOINT_MS = 350;
 /** If the wrong line is the last one written, wait this long before speaking up. */
 const NUDGE_AFTER_IDLE_MS = 7000;
 
@@ -26,14 +29,14 @@ export interface Tutor {
   checkNow: () => void;
 }
 
-export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean): Tutor {
+export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean, lang: Lang = "en"): Tutor {
   const [result, setResult] = useState<CheckResult | null>(null);
   const [checkedSigs, setCheckedSigs] = useState<Map<number, string>>(new Map());
   const [inFlight, setInFlight] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const latest = useRef({ strokes, problem, voiceOn });
-  latest.current = { strokes, problem, voiceOn };
+  const latest = useRef({ strokes, problem, voiceOn, lang });
+  latest.current = { strokes, problem, voiceOn, lang };
   const busy = useRef(false);
   const again = useRef(false);
   const timer = useRef<number | undefined>(undefined);
@@ -58,7 +61,8 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean): 
     setInFlight(true);
     try {
       const transcript = typedTranscript(latest.current.strokes);
-      const res = await checkBoard(latest.current.problem, snap.image, snap.lines, transcript);
+      const res = await checkBoard(latest.current.problem, snap.image, snap.lines, transcript,
+        latest.current.lang);
       setResult(res);
       setCheckedSigs(snap.signatures);
       setFailure(null);
@@ -85,7 +89,7 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean): 
       v.hadError = true;
       if (key === v.errorKey) return;
       const drovePast = res.lines.some((l) => l.line > res.first_error! && l.status !== "skip");
-      const nudge = res.spoken_nudge || `Recalculating. Take another look at line ${res.first_error}.`;
+      const nudge = res.spoken_nudge || PHRASES[latest.current.lang].recalculating(res.first_error);
       if (drovePast) {
         v.errorKey = key;
         say(nudge);
@@ -100,28 +104,34 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean): 
     if (v.hadError) {
       v.hadError = false;
       v.errorKey = "";
-      if (!res.arrived) say("Back on route.");
+      if (!res.arrived) say(PHRASES[latest.current.lang].backOnRoute);
     }
     if (res.arrived && !v.arrived) {
       v.arrived = true;
-      say("You have arrived. Nice work.");
+      say(PHRASES[latest.current.lang].arrived);
     }
   };
 
-  // Look at the board once the pen has rested.
+  // Look at the board once the pen has rested — or right away at a checkpoint,
+  // when the student has just started writing on a line below their work.
+  const deepestLine = useRef(0);
   useEffect(() => {
     window.clearTimeout(timer.current);
     window.clearTimeout(nudgeTimer.current);
     if (strokes.length === 0) {
+      deepestLine.current = 0;
       setResult(null);
       setCheckedSigs(new Map());
       setFailure(null);
       voice.current = { errorKey: "", hadError: false, arrived: false };
       return;
     }
-    timer.current = window.setTimeout(run, PAUSE_MS);
+    const deepest = Math.max(...sigsNow.keys());
+    const advanced = deepest > deepestLine.current && deepestLine.current > 0;
+    deepestLine.current = deepest;
+    timer.current = window.setTimeout(run, advanced ? CHECKPOINT_MS : PAUSE_MS);
     return () => window.clearTimeout(timer.current);
-  }, [strokes, problem, run]);
+  }, [strokes, problem, run, sigsNow]);
 
   useEffect(() => {
     voice.current.arrived = false;

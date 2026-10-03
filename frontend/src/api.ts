@@ -53,8 +53,9 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 /** `transcript`: lines the student typed (line -> exact text). */
-export function checkBoard(problem: string, image: string, lines: number[], transcript?: Record<number, string>) {
-  return post<CheckResult>("/api/check", { problem, image, lines, transcript });
+export function checkBoard(problem: string, image: string, lines: number[], transcript?: Record<number, string>,
+                           lang = "en") {
+  return post<CheckResult>("/api/check", { problem, image, lines, transcript, lang });
 }
 
 export function askTutor(req: {
@@ -63,8 +64,14 @@ export function askTutor(req: {
   image?: string;
   context: string;
   transcript?: Record<number, string>;
+  lang?: string;
 }) {
   return post<{ answer: string }>("/api/ask", req);
+}
+
+/** Read the problem(s) off a cropped photo of homework. */
+export function readProblem(image: string) {
+  return post<{ problems: { problem: string; latex: string }[] }>("/api/problem", { image });
 }
 
 export async function health(): Promise<{ ok: boolean; has_key: boolean; fake?: boolean } | null> {

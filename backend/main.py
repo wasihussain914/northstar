@@ -38,9 +38,10 @@ class SympyPool:
     def __init__(self) -> None:
         self._pool = ProcessPoolExecutor(max_workers=2)
 
-    async def check(self, problem: str, steps: list[tuple[int, str]], target: str) -> dict | None:
+    async def check(self, problem: str, steps: list[tuple[int, str]], target: str,
+                    task: str = "") -> dict | None:
         loop = asyncio.get_running_loop()
-        future = loop.run_in_executor(self._pool, verify.check_steps, problem, steps, target)
+        future = loop.run_in_executor(self._pool, verify.check_steps, problem, steps, target, task)
         try:
             return await asyncio.wait_for(future, SYMPY_TIMEOUT_S)
         except asyncio.TimeoutError:
@@ -107,6 +108,8 @@ class CheckRequest(BaseModel):
     # Lines the student typed instead of writing (line -> exact text). Claude
     # uses them verbatim; fake-vision mode reads only these.
     transcript: dict[int, str] | None = Field(default=None, max_length=60)
+    # Language for student-facing guidance (see tutor.LANGUAGES).
+    lang: str = Field(default="en", max_length=8)
 
 
 SKIP_KINDS = {"crossed_out", "not_math"}
@@ -171,28 +174,28 @@ async def check(req: CheckRequest) -> dict:
     started = time.perf_counter()
     try:
         if FAKE_VISION:
-            board = await fake_tutor.read_board(req.problem, req.transcript, req.lines)
+            board = await fake_tutor.read_board(req.problem, req.transcript, req.lines, req.lang)
         else:
-            board = await tutor.read_board(req.problem, image, req.lines, req.transcript)
+            board = await tutor.read_board(req.problem, image, req.lines, req.transcript, req.lang)
     except tutor.TutorError as exc:
         raise HTTPException(502, str(exc))
     read_ms = (time.perf_counter() - started) * 1000
 
     steps = [(l["line"], l["sympy"]) for l in sorted(board["lines"], key=lambda l: l["line"])
              if l["kind"] not in SKIP_KINDS and l["kind"] != "incomplete"]
-    sym = await sympy_pool.check(board.get("problem_sympy", ""), steps, board.get("target_variable", ""))
+    sym = await sympy_pool.check(board.get("problem_sympy", ""), steps, board.get("target_variable", ""),
+                                 board.get("task") or "")
     lines = merge(board, sym)
 
     first_error = next((l["line"] for l in lines if l["status"] == "error"), None)
-    hints = board.get("hints", [])
-    hint_ink = board.get("hint_ink", [])
-    spoken = board.get("spoken_nudge", "")
-    if first_error is not None and first_error != board.get("first_error_line"):
-        # SymPy caught a wrong turn Claude didn't; get hints for that line.
+    hints, hint_ink, spoken = [], [], ""
+    if first_error is not None:
+        # Hints are a second, text-only call, made only when there is a wrong
+        # turn — the common no-error check pays for transcription alone.
         flagged = next(l for l in lines if l["line"] == first_error)
         try:
             explained = await (fake_tutor if FAKE_VISION else tutor).explain_line(
-                req.problem, lines, first_error, flagged["_detail"], flagged["detail"])
+                req.problem, lines, first_error, flagged["_detail"], flagged["detail"], req.lang)
             hints, spoken = explained["hints"], explained["spoken_nudge"]
             hint_ink = explained.get("hint_ink", [])
         except tutor.TutorError:
@@ -200,8 +203,6 @@ async def check(req: CheckRequest) -> dict:
                      flagged["detail"] or "Compare it carefully with the previous line.", ""]
             spoken = f"Recalculating. Take another look at line {first_error}."
             hint_ink = ["compare with above", "check each term", ""]
-    if first_error is None:
-        hints, spoken, hint_ink = [], "", []
 
     has_work = any(l["status"] not in ("skip", "pending") for l in lines)
     arrived = first_error is None and has_work and (
@@ -229,12 +230,32 @@ async def check(req: CheckRequest) -> dict:
     return result
 
 
+class ProblemRequest(BaseModel):
+    image: str = Field(description="PNG, base64 (a data: URL prefix is fine)", max_length=12_000_000)
+
+
+@app.post("/api/problem")
+async def problem(req: ProblemRequest) -> dict:
+    """Read the problem(s) off a cropped photo of the student's homework."""
+    image, _ = decode_png(req.image)
+    try:
+        out = await (fake_tutor if FAKE_VISION else tutor).read_problem(image)
+    except tutor.TutorError as exc:
+        raise HTTPException(502, str(exc))
+    problems = [{"problem": p["problem"], "latex": p.get("latex", "")}
+                for p in out.get("problems", []) if p.get("problem")]
+    if not problems:
+        raise HTTPException(422, "Couldn't find a math problem in that crop. Try a tighter one.")
+    return {"problems": problems}
+
+
 class AskRequest(BaseModel):
     problem: str = Field(default="", max_length=500)
     question: str = Field(min_length=1, max_length=500)
     image: str | None = Field(default=None, max_length=12_000_000)
     context: str = Field(default="", max_length=4000)
     transcript: dict[int, str] | None = None
+    lang: str = Field(default="en", max_length=8)
 
 
 @app.post("/api/ask")
@@ -242,6 +263,6 @@ async def ask(req: AskRequest) -> dict:
     image = decode_png(req.image)[0] if req.image else None
     try:
         return await (fake_tutor if FAKE_VISION else tutor).ask(req.problem, req.question, image, req.transcript,
-                                                                req.context)
+                                                                req.context, req.lang)
     except tutor.TutorError as exc:
         raise HTTPException(502, str(exc))

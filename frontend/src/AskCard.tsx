@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { askTutor, type CheckResult } from "./api";
 import { snapshot, type Stroke } from "./board/geometry";
 import { typedTranscript } from "./board/handwriting";
+import { speechLocale, type Lang } from "./i18n";
 import { speak, stopSpeaking } from "./voice";
 
 // Web Speech recognition isn't in TypeScript's DOM types yet.
@@ -33,10 +34,11 @@ interface Props {
   strokes: Stroke[];
   result: CheckResult | null;
   voiceOn: boolean;
+  lang: Lang;
 }
 
 /** Talk to the tutor: hold a conversation about the board, by voice or by typing. */
-export function AskCard({ problem, strokes, result, voiceOn }: Props) {
+export function AskCard({ problem, strokes, result, voiceOn, lang }: Props) {
   const [listening, setListening] = useState(false);
   const [draft, setDraft] = useState("");
   const [log, setLog] = useState<Exchange[]>([]);
@@ -58,6 +60,7 @@ export function AskCard({ problem, strokes, result, voiceOn }: Props) {
         image: snap?.image,
         context: describe(result),
         transcript: typedTranscript(strokes),
+        lang,
       });
       setLog((l) => l.map((x) => (x.question === question && x.answer === null ? { ...x, answer } : x)));
       if (voiceOn) speak(answer);
@@ -75,7 +78,7 @@ export function AskCard({ problem, strokes, result, voiceOn }: Props) {
     }
     stopSpeaking();
     const rec = new RecognitionCtor();
-    rec.lang = "en-US";
+    rec.lang = speechLocale(lang);
     rec.interimResults = true;
     rec.continuous = false;
     heard.current = "";

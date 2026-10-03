@@ -16,6 +16,13 @@ MODEL = "fake-vision"
 
 
 def _problem_math(problem: str) -> str:
+    # "Differentiate <f>" becomes the dialect diff(<f>, x) so the real domain
+    # checkers run even in fake mode (the demo script relies on this).
+    m = re.match(r"^\s*(differentiate|derivative of)\s*:?\s*(.+)$", problem, flags=re.I)
+    if m:
+        body = m.group(2).strip()
+        letters = sorted(set(re.findall(r"[a-z]", body))) or ["x"]
+        return f"diff({body}, {letters[0]})"
     text = re.sub(r"^\s*(solve|simplify|expand|factor)\s*:?\s*", "", problem, flags=re.I)
     return re.sub(r"\s+for\s+[a-z]\s*$", "", text, flags=re.I).strip()
 
@@ -26,7 +33,8 @@ def _kind(text: str) -> str:
     return "equation" if "=" in text else "expression"
 
 
-async def read_board(problem: str, transcript: dict[int, str] | None, lines: list[int]) -> dict:
+async def read_board(problem: str, transcript: dict[int, str] | None, lines: list[int],
+                     lang: str = "en") -> dict:
     if not transcript:
         raise TutorError("Fake vision mode only reads lines written with northstar.write().")
     math = _problem_math(problem)
@@ -37,11 +45,8 @@ async def read_board(problem: str, transcript: dict[int, str] | None, lines: lis
     return {
         "problem_sympy": math,
         "target_variable": target,
+        "task": "",
         "lines": out_lines,
-        "first_error_line": 0,
-        "hints": [],
-        "hint_ink": [],
-        "spoken_nudge": "",
         "next_step_hint": "What could you do to both sides to get the variable on its own?",
         "next_step_ink": "isolate the variable",
         "on_track_message": "Nice and steady.",
@@ -50,7 +55,17 @@ async def read_board(problem: str, transcript: dict[int, str] | None, lines: lis
     }
 
 
-async def explain_line(problem: str, lines: list[dict], line: int, detail: str, note: str = "") -> dict:
+async def read_problem(image_png_b64: str) -> dict:
+    # No vision here; hand back a known worksheet so the capture and trip flows
+    # can be tested free.
+    return {"problems": [
+        {"problem": "Solve 2(x - 3) + 4 = 10", "latex": "2(x - 3) + 4 = 10"},
+        {"problem": "Solve x/3 + 1 = 5", "latex": "x/3 + 1 = 5"},
+    ]}
+
+
+async def explain_line(problem: str, lines: list[dict], line: int, detail: str, note: str = "",
+                       lang: str = "en") -> dict:
     # `detail` can contain solution values; only the student-safe `note` is used.
     return {
         "hints": [
@@ -64,5 +79,5 @@ async def explain_line(problem: str, lines: list[dict], line: int, detail: str, 
 
 
 async def ask(problem: str, question: str, image_png_b64: str | None, transcript: dict[int, str] | None,
-              context: str) -> dict:
+              context: str, lang: str = "en") -> dict:
     return {"answer": f"(fake mode) You asked: {question}. Try comparing each line with the one above it."}

@@ -5,14 +5,19 @@ import { LINES, lineOf, type Stroke } from "./board/geometry";
 import { textToStrokes } from "./board/handwriting";
 import { AskCard } from "./AskCard";
 import { DEMOS, runDemo } from "./demo";
+import { DestinationCard } from "./DestinationCard";
+import { RecalcBanner, Starburst } from "./Flashes";
+import { ProblemScanner, type ScannedProblem } from "./ProblemScanner";
 import { RoutePanel } from "./RoutePanel";
 import { TypeBar } from "./TypeBar";
+import { LANGUAGES, speechLocale, type Lang } from "./i18n";
 import { useTrip } from "./useTrip";
 import { useTutor } from "./useTutor";
-import { speechSupported, stopSpeaking, unlockSpeech } from "./voice";
+import { setSpeechLang, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
 
 const PRESETS = [
   "Solve 2(x − 3) + 4 = 10",
+  "Differentiate x³ − 3x² + 2x",
   "Solve 3(x + 2) − 5 = 2x + 9",
   "Solve −2x + 4 > 10",
   "Solve x/3 + 1 = 5",
@@ -68,11 +73,29 @@ export default function App() {
   const [{ present: strokes, past, future }, dispatch] = useReducer(history, { past: [], present: [], future: [] });
   const [tool, setTool] = useState<Tool>("pen");
   const [problem, setProblem] = useState(PRESETS[0]);
+  // Set when the problem came off real homework: the crop and its LaTeX.
+  const [scan, setScan] = useState<{ latex: string; image: string | null } | null>(null);
+  const [scanning, setScanning] = useState(false);
+  // A scanned worksheet becomes a trip: several problems, one route.
+  const [stops, setStops] = useState<{ problem: string; latex: string }[]>([]);
+  const [stopIndex, setStopIndex] = useState(0);
+  const [tripImage, setTripImage] = useState<string | null>(null);
+  const [lang, setLang] = useState<Lang>(() => {
+    const saved = localStorage.getItem("ns-lang");
+    return LANGUAGES.some((l) => l.code === saved) ? (saved as Lang) : "en";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("ns-lang", lang);
+    setSpeechLang(speechLocale(lang));
+  }, [lang]);
   const [voiceOn, setVoiceOn] = useState(speechSupported);
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
   const [hasKey, setHasKey] = useState<boolean | null>(null);
+  // The route drawer slides over the paper; wide desktops dock it (CSS).
+  const [panelOpen, setPanelOpen] = useState(false);
 
-  const tutor = useTutor(strokes, problem, voiceOn);
+  const tutor = useTutor(strokes, problem, voiceOn, lang);
   const { trip, countHint } = useTrip(strokes, tutor);
 
   // Red teacher pen. Not part of undo, and not sent to the tutor.
@@ -102,6 +125,16 @@ export default function App() {
     }
   };
 
+  // Like a GPS, surface the detail when something needs attention:
+  // a wrong turn opens the drawer (hints live there), and so does arriving.
+  const arrived = !!tutor.result?.arrived && tutor.phase === "ready";
+  useEffect(() => {
+    if (tutor.errorLine != null) setPanelOpen(true);
+  }, [tutor.errorLine != null && tutor.errorKey]);
+  useEffect(() => {
+    if (arrived) setPanelOpen(true);
+  }, [arrived]);
+
   useEffect(() => {
     health().then((h) => setHasKey(h ? h.has_key : null));
   }, []);
@@ -116,7 +149,13 @@ export default function App() {
       erase: (line: number) =>
         dispatch({ type: "erase", ids: strokesRef.current.filter((s) => lineOf(s) === line).map((s) => s.id) }),
       clear: () => dispatch({ type: "clear" }),
-      problem: setProblem,
+      problem: (p: string) => {
+        setProblem(p);
+        setScan(null);
+        setStops([]);
+        setStopIndex(0);
+        setTripImage(null);
+      },
     };
   }, []);
 
@@ -144,10 +183,56 @@ export default function App() {
     setVoiceOn(!voiceOn);
   };
 
-  const newProblem = (p: string) => {
+  const newProblem = (p: string, s: { latex: string; image: string | null } | null = null) => {
     setProblem(p);
+    setScan(s);
     dispatch({ type: "clear" });
     setSelectedLine(null);
+    setPanelOpen(false);
+  };
+
+  const clearTrip = () => {
+    setStops([]);
+    setStopIndex(0);
+    setTripImage(null);
+  };
+
+  const useScan = ({ problem: p, latex, image }: ScannedProblem) => {
+    stopDemo();
+    setScanning(false);
+    clearTrip();
+    newProblem(p, { latex, image });
+  };
+
+  const useTripScan = (list: { problem: string; latex: string }[], image: string) => {
+    stopDemo();
+    setScanning(false);
+    setStops(list);
+    setStopIndex(0);
+    setTripImage(image);
+    newProblem(list[0].problem, { latex: list[0].latex, image });
+  };
+
+  const goToStop = (i: number) => {
+    if (i < 0 || i >= stops.length) return;
+    setStopIndex(i);
+    newProblem(stops[i].problem, { latex: stops[i].latex, image: tripImage });
+  };
+
+  // The trip-summary button: next stop if the trip has one, else a fresh problem.
+  const hasNextStop = stops.length > 0 && stopIndex + 1 < stops.length;
+  const advance = () => {
+    if (hasNextStop) goToStop(stopIndex + 1);
+    else {
+      clearTrip();
+      newProblem(nextPreset(problem));
+    }
+  };
+
+  // Editing a scanned problem's text drops the stale LaTeX but keeps the snap.
+  const editProblem = (p: string) => {
+    setProblem(p);
+    setScan((s) => (s ? { ...s, latex: "" } : s));
   };
 
   const onSelectLine = useCallback((line: number) => setSelectedLine((cur) => (cur === line ? null : line)), []);
@@ -179,7 +264,11 @@ export default function App() {
     setSelectedLine(null);
     const script = DEMOS.find((d) => d.problem === problem) ?? DEMOS[0];
     runDemo(script, {
-      setProblem,
+      setProblem: (p) => {
+        setProblem(p);
+        setScan(null);
+        clearTrip();
+      },
       clear: () => dispatch({ type: "clear" }),
       add: (s) => dispatch({ type: "addMany", strokes: s }),
       eraseLine: (line) =>
@@ -208,40 +297,43 @@ export default function App() {
           <span>North Star</span>
         </div>
 
-        <label className="destination">
-          <span className="destination-label">Problem</span>
-          <input
-            value={problem}
-            onChange={(e) => setProblem(e.target.value)}
-            placeholder="Type a problem, e.g. Solve 3(x − 2) + 5 = 2x + 9"
-            list="presets"
-            spellCheck={false}
-          />
-          <datalist id="presets">
-            {PRESETS.map((p) => (
-              <option key={p} value={p} />
-            ))}
-          </datalist>
-        </label>
+        <div className="presets" aria-label="Example problems">
+          <button
+            className={`chip demo${demoRunning ? " running" : ""}`}
+            onClick={demoRunning ? stopDemo : startDemo}
+            title="Watch North Star guide a solve, mistakes included"
+          >
+            {demoRunning ? "■ Stop demo" : "▶ Demo"}
+          </button>
+          {PRESETS.map((p) => (
+            <button
+              key={p}
+              className={`chip${p === problem ? " active" : ""}`}
+              onClick={() => {
+                stopDemo();
+                clearTrip();
+                newProblem(p);
+              }}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
 
-        <div className="tools" role="toolbar" aria-label="Board tools">
-          <ToolButton active={tool === "pen"} onClick={() => setTool("pen")} label="Pen (P)">
-            <path d="M4 16l1-4 8.5-8.5a2.1 2.1 0 013 3L8 15l-4 1z" />
-          </ToolButton>
-          <ToolButton active={tool === "eraser"} onClick={() => setTool("eraser")} label="Eraser (E)">
-            <path d="M7.5 16h9M3.8 11.8l7-7a1.8 1.8 0 012.5 0l2.9 2.9a1.8 1.8 0 010 2.5L10 16.4H7.6l-3.8-3.8a.6.6 0 010-.8z" />
-          </ToolButton>
-          <span className="divider" />
-          <ToolButton onClick={() => dispatch({ type: "undo" })} disabled={!past.length} label="Undo (⌘Z)">
-            <path d="M7 5L3 9l4 4M3.5 9H12a5 5 0 010 10H9" />
-          </ToolButton>
-          <ToolButton onClick={() => dispatch({ type: "redo" })} disabled={!future.length} label="Redo (⇧⌘Z)">
-            <path d="M13 5l4 4-4 4M16.5 9H8a5 5 0 000 10h3" />
-          </ToolButton>
-          <ToolButton onClick={() => dispatch({ type: "clear" })} disabled={!strokes.length} label="Clear board">
-            <path d="M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11" />
-          </ToolButton>
-          <span className="divider" />
+        <div className="topbar-actions">
+          <select
+            className="lang-pick"
+            value={lang}
+            onChange={(e) => setLang(e.target.value as Lang)}
+            aria-label="Guidance language"
+            title="Hints and voice in your language"
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.label}
+              </option>
+            ))}
+          </select>
           {speechSupported && (
             <ToolButton active={voiceOn} onClick={toggleVoice} label={voiceOn ? "Voice on" : "Voice off"}>
               {voiceOn ? (
@@ -254,6 +346,14 @@ export default function App() {
           <button className="btn primary check-now" onClick={tutor.checkNow} disabled={!strokes.length || tutor.phase === "checking"}>
             Check now
           </button>
+          <button
+            className={`btn route-toggle${panelOpen ? " active" : ""}`}
+            onClick={() => setPanelOpen(!panelOpen)}
+            aria-expanded={panelOpen}
+          >
+            <span className={`route-dot tone-${pillTone(tutor, arrived)}`} />
+            Route
+          </button>
         </div>
       </header>
 
@@ -265,59 +365,122 @@ export default function App() {
 
       <main className="workspace">
         <section className="board-area">
-          <div className="presets" aria-label="Example problems">
-            <button
-              className={`chip demo${demoRunning ? " running" : ""}`}
-              onClick={demoRunning ? stopDemo : startDemo}
-              title="Watch North Star guide a solve, mistakes included"
-            >
-              {demoRunning ? "■ Stop demo" : "▶ Demo"}
-            </button>
-            {PRESETS.map((p) => (
-              <button
-                key={p}
-                className={`chip${p === problem ? " active" : ""}`}
-                onClick={() => {
-                  stopDemo();
-                  newProblem(p);
-                }}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-          <Board
-            strokes={strokes}
-            tool={tool}
-            markers={tutor.markers}
-            errorLine={tutor.errorLine}
-            selectedLine={selectedLine}
-            teacherInk={teacherInk}
-            onAdd={(stroke) => dispatch({ type: "add", stroke })}
-            onErase={(ids) => dispatch({ type: "erase", ids })}
-            onSelectLine={onSelectLine}
-            onInteract={() => {
-              unlockSpeech();
+          <DestinationCard
+            problem={problem}
+            latex={scan?.latex ?? ""}
+            image={scan?.image ?? null}
+            stopIndex={stopIndex}
+            stopCount={stops.length}
+            onJumpStop={goToStop}
+            onEdit={editProblem}
+            onScan={() => {
               stopDemo();
+              setScanning(true);
             }}
           />
+          <div className="board-stage">
+            <StatusPill tutor={tutor} arrived={arrived} onTap={() => setPanelOpen(true)} />
+            <RecalcBanner errorKey={tutor.errorKey} line={tutor.errorLine} />
+            <Starburst fireKey={arrived ? problem : ""} />
+            <div className="float-tools" role="toolbar" aria-label="Board tools">
+              <ToolButton active={tool === "pen"} onClick={() => setTool("pen")} label="Pen (P)">
+                <path d="M4 16l1-4 8.5-8.5a2.1 2.1 0 013 3L8 15l-4 1z" />
+              </ToolButton>
+              <ToolButton active={tool === "eraser"} onClick={() => setTool("eraser")} label="Eraser (E)">
+                <path d="M7.5 16h9M3.8 11.8l7-7a1.8 1.8 0 012.5 0l2.9 2.9a1.8 1.8 0 010 2.5L10 16.4H7.6l-3.8-3.8a.6.6 0 010-.8z" />
+              </ToolButton>
+              <span className="float-divider" />
+              <ToolButton onClick={() => dispatch({ type: "undo" })} disabled={!past.length} label="Undo (⌘Z)">
+                <path d="M7 5L3 9l4 4M3.5 9H12a5 5 0 010 10H9" />
+              </ToolButton>
+              <ToolButton onClick={() => dispatch({ type: "redo" })} disabled={!future.length} label="Redo (⇧⌘Z)">
+                <path d="M13 5l4 4-4 4M16.5 9H8a5 5 0 000 10h3" />
+              </ToolButton>
+              <span className="float-divider" />
+              <ToolButton onClick={() => dispatch({ type: "clear" })} disabled={!strokes.length} label="Clear board">
+                <path d="M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11" />
+              </ToolButton>
+            </div>
+            <Board
+              strokes={strokes}
+              tool={tool}
+              markers={tutor.markers}
+              errorLine={tutor.errorLine}
+              selectedLine={selectedLine}
+              teacherInk={teacherInk}
+              onAdd={(stroke) => dispatch({ type: "add", stroke })}
+              onErase={(ids) => dispatch({ type: "erase", ids })}
+              onSelectLine={onSelectLine}
+              onInteract={() => {
+                unlockSpeech();
+                stopDemo();
+              }}
+            />
+          </div>
           <TypeBar line={typeTarget} replacing={typeTarget != null && usedLines.has(typeTarget)} onSubmit={typeStep} />
         </section>
-        <RoutePanel
-          tutor={tutor}
-          problem={problem}
-          selectedLine={selectedLine}
-          onSelectLine={onSelectLine}
-          voiceOn={voiceOn}
-          trip={trip}
-          lastInkLine={lastUsed || null}
-          onHint={handleHint}
-          onNewTrip={() => newProblem(nextPreset(problem))}
-        >
-          <AskCard problem={problem} strokes={strokes} result={tutor.result} voiceOn={voiceOn} />
-        </RoutePanel>
+        <div className={`drawer-backdrop${panelOpen ? " open" : ""}`} onClick={() => setPanelOpen(false)} />
+        <aside className={`drawer${panelOpen ? " open" : ""}`} aria-label="Route details">
+          <header className="drawer-head">
+            <span className="eyebrow">Route</span>
+            <button className="icon-btn" onClick={() => setPanelOpen(false)} aria-label="Close route panel">
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M6 5l8 5-8 5z" fill="currentColor" stroke="none" transform="rotate(90 10 10)" />
+              </svg>
+            </button>
+          </header>
+          <RoutePanel
+            tutor={tutor}
+            problem={problem}
+            selectedLine={selectedLine}
+            onSelectLine={onSelectLine}
+            voiceOn={voiceOn}
+            trip={trip}
+            lastInkLine={lastUsed || null}
+            onHint={handleHint}
+            onNewTrip={advance}
+            nextLabel={hasNextStop ? `Next stop · ${stopIndex + 2} of ${stops.length}` : "New problem"}
+          >
+            <AskCard problem={problem} strokes={strokes} result={tutor.result} voiceOn={voiceOn} lang={lang} />
+          </RoutePanel>
+        </aside>
       </main>
+
+      {scanning && <ProblemScanner onUse={useScan} onTrip={useTripScan} onClose={() => setScanning(false)} />}
     </div>
+  );
+}
+
+type PillTone = "idle" | "busy" | "on" | "off" | "arrived" | "fail";
+
+function pillTone(tutor: ReturnType<typeof useTutor>, arrived: boolean): PillTone {
+  if (tutor.phase === "failed") return "fail";
+  if (tutor.phase === "checking" || tutor.phase === "watching") return "busy";
+  if (tutor.errorLine != null) return "off";
+  if (arrived) return "arrived";
+  if (tutor.result && tutor.phase === "ready") return "on";
+  return "idle";
+}
+
+/** The glanceable GPS banner floating on the paper. Tap it for the full route. */
+function StatusPill({ tutor, arrived, onTap }: {
+  tutor: ReturnType<typeof useTutor>;
+  arrived: boolean;
+  onTap: () => void;
+}) {
+  const tone = pillTone(tutor, arrived);
+  const label =
+    tone === "fail" ? "Lost signal"
+    : tone === "busy" ? (tutor.phase === "checking" ? "Checking…" : "Watching")
+    : tone === "off" ? `Off route — line ${tutor.errorLine}`
+    : tone === "arrived" ? "You have arrived"
+    : tone === "on" ? (tutor.result!.eta_steps > 0 ? `On route · ~${tutor.result!.eta_steps} to go` : "On route")
+    : "Write one step per line";
+  return (
+    <button className={`status-pill tone-${tone}`} onClick={onTap} title="Show the route">
+      <span className="status-dot" />
+      {label}
+    </button>
   );
 }
 
