@@ -192,7 +192,7 @@ BOARD_SCHEMA: dict[str, Any] = {
         "route_note": {"type": "string"},
     },
     "required": ["problem_sympy", "target_variable", "task", "lines",
-                 "next_step_hint", "on_track_message", "eta_steps", "route_note"],
+                 "next_step_hint", "next_step_ink", "on_track_message", "eta_steps", "route_note"],
     "additionalProperties": False,
 }
 
@@ -463,7 +463,8 @@ HINT_RULES = """Write exactly three hints for that line, from gentle to specific
 look and asks a question. Hint 2 names the rule or idea that was misapplied. Hint 3 shows the corrected version \
 of that one line only. Never state the final answer or any solution values, in any hint.
 Also write hint_ink: three very short margin notes (at most four words each), one per hint level, with matching \
-specificity. Keep each as a terse teacher note (e.g. "check the sign"), not a sentence; no arrows or line numbers.
+specificity: words a teacher would jot in red beside that line (e.g. "check the sign"), not a sentence. \
+No diagram, no arrows, no line numbers, and no final answer.
 Also write spoken_nudge: one short sentence (under 15 words) a GPS voice could say about the wrong turn, e.g. \
 "Recalculating. Take another look at the sign in line 3.\""""
 
