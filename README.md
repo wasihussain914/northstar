@@ -1,6 +1,6 @@
-# ✦ North Star
+# ✦ Untangled
 
-**A GPS for solving math.** Work a problem on a digital whiteboard and North Star follows along. It never solves
+**A GPS for solving math.** Work a problem on a digital whiteboard and Untangled follows along. It never solves
 the problem for you. When you take a wrong turn it marks the exact line, says *"Recalculating"* out loud, and
 gives you hints that get more specific each time you ask.
 
@@ -57,7 +57,7 @@ Also:
   change (Accessibility track: navigation "regardless of language").
 - **Checkpoints.** The moment you start a new line, the line you just finished is checked (~0.35s), so wrong
   turns surface while your pen is still moving. A ~1.2s pause checks everything else.
-- **Ask North Star.** Tap the mic (or type) to ask "why is line 2 wrong?". Claude sees the board and the last
+- **Ask Untangled.** Tap the mic (or type) to ask "why is line 2 wrong?". Claude sees the board and the last
   check, and answers out loud in at most three sentences, never with the final answer.
 - **Trip summary** on arrival: steps, wrong turns (stale lines after a fix don't count), hints used, time.
 - **▶ Demo** plays a scripted solve in animated handwriting: a deliberate mistake, the catch, the fix, the arrival.
@@ -130,20 +130,20 @@ Vite prints:
 If Windows Firewall prompts, allow Node and Python on private networks. If the device cannot connect and no prompt appeared:
 
 ```powershell
-New-NetFirewallRule -DisplayName "North Star Vite" -Direction Inbound -Protocol TCP -LocalPort 5173 -Action Allow -Profile Private
-New-NetFirewallRule -DisplayName "North Star API" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow -Profile Private
+New-NetFirewallRule -DisplayName "Untangled Vite" -Direction Inbound -Protocol TCP -LocalPort 5173 -Action Allow -Profile Private
+New-NetFirewallRule -DisplayName "Untangled API" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow -Profile Private
 ```
 
 Apple Pencil uses real pressure. The canvas keeps the pen pointer and drops the palm: a wide touch is ignored, and if the palm lands first its mark is discarded when the pencil touches. After the pencil has been used, fingers stay ignored. More iPad notes are in [IPAD.md](IPAD.md).
 
-- Plain `http://` is enough for drawing, typed steps, checks, and the spoken GPS replies. The microphone for Ask North Star needs HTTPS (see ngrok below).
+- Plain `http://` is enough for drawing, typed steps, checks, and the spoken GPS replies. The microphone for Ask Untangled needs HTTPS (see ngrok below).
 - Keep the computer awake and both processes running.
 - A Home Screen icon is only a bookmark; it breaks when this computer's IP changes.
 - Run the servers on Windows itself if the tablet is connecting to a Windows PC. A server inside WSL is often unreachable.
 
 ## Off-network: ngrok
 
-Use [ngrok](https://ngrok.com/) when the phone is not on the same LAN, or when you need **HTTPS** (iOS only allows the Ask North Star microphone on HTTPS). The API key stays on this computer. Anyone with the public link can use your API quota until you stop ngrok. Do not put the URL in git.
+Use [ngrok](https://ngrok.com/) when the phone is not on the same LAN, or when you need **HTTPS** (iOS only allows the Ask Untangled microphone on HTTPS). The API key stays on this computer. Anyone with the public link can use your API quota until you stop ngrok. Do not put the URL in git.
 
 Install ngrok and add your auth token once (`ngrok config add-authtoken …`). Start the API and `npm run dev` on this computer, then in another terminal:
 

@@ -1,4 +1,4 @@
-"""North Star API.
+"""Untangled API.
 
 POST /api/check takes a snapshot of the board and returns, per line, whether
 the student is still on route, plus hints for the first wrong turn.
@@ -79,7 +79,7 @@ async def lifespan(_: FastAPI):
     sympy_pool.close()
 
 
-app = FastAPI(title="North Star", lifespan=lifespan)
+app = FastAPI(title="Untangled", lifespan=lifespan)
 
 
 def cors_origins() -> list[str]:

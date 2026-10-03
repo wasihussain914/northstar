@@ -133,7 +133,7 @@ class TutorError(RuntimeError):
     pass
 
 
-SYSTEM = """You are North Star, a patient math tutor that watches a student work on a whiteboard, \
+SYSTEM = """You are Untangled, a patient math tutor that watches a student work on a whiteboard, \
 like a GPS watching a driver. The student is the driver: you never solve the problem for them.
 
 You cover algebra, trigonometry, single- and multivariable calculus, ordinary and partial differential \
@@ -571,7 +571,7 @@ async def practice_problem(problem: str, wrong_latex: str, note: str, lang: str 
     return await _structured(prompt, PRACTICE_SCHEMA, max_tokens=2000)
 
 
-ASK_INSTRUCTIONS = """The student just asked you a question out loud while working. Answer it as North Star: \
+ASK_INSTRUCTIONS = """The student just asked you a question out loud while working. Answer it as Untangled: \
 in at most three short sentences, warm and concrete, guiding rather than solving. Never state the final answer, \
 even if asked directly; offer the next nudge instead. Your answer will be read aloud by a speech synthesizer, so \
 write math in words a person would say ("two x minus six equals ten"), with no LaTeX, symbols or markdown. \

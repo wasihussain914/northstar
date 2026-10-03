@@ -1,7 +1,7 @@
 [project]
-name = "northstar-backend"
+name = "untangled-backend"
 version = "0.1.0"
-description = "North Star: a GPS for solving math problems"
+description = "Untangled: a GPS for solving math problems"
 requires-python = ">=3.11"
 dependencies = [
     "anthropic>=1.11.0",

@@ -1,7 +1,7 @@
 /**
  * Turn LaTeX (or plain typed math) into words a speech synthesizer reads well:
  * "2x^{2} - \frac{1}{2} \le 5" -> "2 x squared minus 1 over 2 is less than or equal to 5".
- * Covers the algebra North Star handles; anything unknown is passed through.
+ * Covers the algebra Untangled handles; anything unknown is passed through.
  */
 export function speakable(math: string): string {
   let s = math

@@ -3,7 +3,7 @@ import type { Stroke } from "./board/geometry";
 
 /**
  * Demo autopilot: writes a solve in animated "handwriting", takes a wrong turn
- * on purpose, waits for North Star to catch it, then fixes it and finishes.
+ * on purpose, waits for Untangled to catch it, then fixes it and finishes.
  * For presenting without a stylus.
  */
 
