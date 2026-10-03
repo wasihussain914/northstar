@@ -76,9 +76,21 @@ export default function App() {
   const [voiceOn, setVoiceOn] = useState(speechSupported);
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
   const [hasKey, setHasKey] = useState<boolean | null>(null);
+  // The route drawer slides over the paper; wide desktops dock it (CSS).
+  const [panelOpen, setPanelOpen] = useState(false);
 
   const tutor = useTutor(strokes, problem, voiceOn);
   const { trip, countHint } = useTrip(strokes, tutor);
+
+  // Like a GPS, surface the detail when something needs attention:
+  // a wrong turn opens the drawer (hints live there), and so does arriving.
+  const arrived = !!tutor.result?.arrived && tutor.phase === "ready";
+  useEffect(() => {
+    if (tutor.errorLine != null) setPanelOpen(true);
+  }, [tutor.errorLine != null && tutor.errorKey]);
+  useEffect(() => {
+    if (arrived) setPanelOpen(true);
+  }, [arrived]);
 
   useEffect(() => {
     health().then((h) => setHasKey(h ? h.has_key : null));
@@ -130,6 +142,7 @@ export default function App() {
     setScan(s);
     dispatch({ type: "clear" });
     setSelectedLine(null);
+    setPanelOpen(false);
   };
 
   const useScan = ({ problem: p, latex, image }: ScannedProblem) => {
@@ -240,6 +253,14 @@ export default function App() {
           <button className="btn primary check-now" onClick={tutor.checkNow} disabled={!strokes.length || tutor.phase === "checking"}>
             Check now
           </button>
+          <button
+            className={`btn route-toggle${panelOpen ? " active" : ""}`}
+            onClick={() => setPanelOpen(!panelOpen)}
+            aria-expanded={panelOpen}
+          >
+            <span className={`route-dot tone-${pillTone(tutor, arrived)}`} />
+            Route
+          </button>
         </div>
       </header>
 
@@ -262,6 +283,7 @@ export default function App() {
             }}
           />
           <div className="board-stage">
+            <StatusPill tutor={tutor} arrived={arrived} onTap={() => setPanelOpen(true)} />
             <div className="float-tools" role="toolbar" aria-label="Board tools">
               <ToolButton active={tool === "pen"} onClick={() => setTool("pen")} label="Pen (P)">
                 <path d="M4 16l1-4 8.5-8.5a2.1 2.1 0 013 3L8 15l-4 1z" />
@@ -298,22 +320,66 @@ export default function App() {
           </div>
           <TypeBar line={typeTarget} replacing={typeTarget != null && usedLines.has(typeTarget)} onSubmit={typeStep} />
         </section>
-        <RoutePanel
-          tutor={tutor}
-          problem={problem}
-          selectedLine={selectedLine}
-          onSelectLine={onSelectLine}
-          voiceOn={voiceOn}
-          trip={trip}
-          onHint={countHint}
-          onNewTrip={() => newProblem(nextPreset(problem))}
-        >
-          <AskCard problem={problem} strokes={strokes} result={tutor.result} voiceOn={voiceOn} />
-        </RoutePanel>
+        <div className={`drawer-backdrop${panelOpen ? " open" : ""}`} onClick={() => setPanelOpen(false)} />
+        <aside className={`drawer${panelOpen ? " open" : ""}`} aria-label="Route details">
+          <header className="drawer-head">
+            <span className="eyebrow">Route</span>
+            <button className="icon-btn" onClick={() => setPanelOpen(false)} aria-label="Close route panel">
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M6 5l8 5-8 5z" fill="currentColor" stroke="none" transform="rotate(90 10 10)" />
+              </svg>
+            </button>
+          </header>
+          <RoutePanel
+            tutor={tutor}
+            problem={problem}
+            selectedLine={selectedLine}
+            onSelectLine={onSelectLine}
+            voiceOn={voiceOn}
+            trip={trip}
+            onHint={countHint}
+            onNewTrip={() => newProblem(nextPreset(problem))}
+          >
+            <AskCard problem={problem} strokes={strokes} result={tutor.result} voiceOn={voiceOn} />
+          </RoutePanel>
+        </aside>
       </main>
 
       {scanning && <ProblemScanner onUse={useScan} onClose={() => setScanning(false)} />}
     </div>
+  );
+}
+
+type PillTone = "idle" | "busy" | "on" | "off" | "arrived" | "fail";
+
+function pillTone(tutor: ReturnType<typeof useTutor>, arrived: boolean): PillTone {
+  if (tutor.phase === "failed") return "fail";
+  if (tutor.phase === "checking" || tutor.phase === "watching") return "busy";
+  if (tutor.errorLine != null) return "off";
+  if (arrived) return "arrived";
+  if (tutor.result && tutor.phase === "ready") return "on";
+  return "idle";
+}
+
+/** The glanceable GPS banner floating on the paper. Tap it for the full route. */
+function StatusPill({ tutor, arrived, onTap }: {
+  tutor: ReturnType<typeof useTutor>;
+  arrived: boolean;
+  onTap: () => void;
+}) {
+  const tone = pillTone(tutor, arrived);
+  const label =
+    tone === "fail" ? "Lost signal"
+    : tone === "busy" ? (tutor.phase === "checking" ? "Checking…" : "Watching")
+    : tone === "off" ? `Off route — line ${tutor.errorLine}`
+    : tone === "arrived" ? "You have arrived"
+    : tone === "on" ? (tutor.result!.eta_steps > 0 ? `On route · ~${tutor.result!.eta_steps} to go` : "On route")
+    : "Write one step per line";
+  return (
+    <button className={`status-pill tone-${tone}`} onClick={onTap} title="Show the route">
+      <span className="status-dot" />
+      {label}
+    </button>
   );
 }
 
