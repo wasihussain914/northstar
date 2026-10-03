@@ -595,7 +595,7 @@ code {
 /* The glanceable GPS banner floating on the paper. */
 .status-pill {
   position: absolute;
-  top: 10px;
+  top: calc(10px + var(--q-band, 0px));
   right: 12px;
   z-index: 6;
   display: inline-flex;
@@ -696,6 +696,17 @@ code {
   touch-action: pan-y;
 }
 
+.gutter-question {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--paper-rule);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #1d4ed8;
+}
+
 .gutter-row {
   width: 100%;
   display: flex;
@@ -718,8 +729,13 @@ code {
   cursor: default;
 }
 
-.gutter-row.selected {
-  background: rgba(59, 130, 246, 0.07);
+.gutter-row.selected,
+.gutter-row.prompt {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.gutter-row.prompt .line-no {
+  color: #1d4ed8;
 }
 
 .line-no {
@@ -1262,6 +1278,90 @@ canvas.ink.tool-eraser {
   font-size: 20px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Plan your route ---------- */
+
+/* In flow above the paper, so it never blocks the pen. */
+.plan-card {
+  position: relative;
+  flex-shrink: 0;
+  background: var(--bg-raised);
+  border: 1px solid rgba(245, 196, 81, 0.35);
+  border-radius: 16px;
+  padding: 12px 16px;
+  animation: rise 0.3s ease-out;
+}
+
+.plan-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.plan-ask {
+  margin: 2px 0 12px;
+  font-size: 16px;
+}
+
+.plan-feedback {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  animation: rise 0.25s ease-out;
+}
+
+.plan-feedback.verdict-good {
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.plan-feedback.verdict-partial {
+  border: 1px solid rgba(234, 179, 8, 0.4);
+}
+
+.plan-feedback.verdict-off {
+  border: 1px solid rgba(245, 158, 11, 0.55);
+}
+
+.plan-go {
+  margin-top: 10px;
+}
+
+/* ---------- Detour practice ---------- */
+
+.practice {
+  border-color: rgba(110, 168, 255, 0.35);
+}
+
+.practice-lead {
+  margin: 0 0 10px;
+  color: var(--muted);
+}
+
+.skill-chip {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--blue);
+  background: rgba(110, 168, 255, 0.12);
+  border: 1px solid rgba(110, 168, 255, 0.4);
+  border-radius: 999px;
+  padding: 3px 10px;
+  margin-bottom: 8px;
+}
+
+.practice-problem {
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+
+.practice-error {
+  margin: 8px 0 0;
+  color: var(--red);
+  font-size: 13px;
 }
 
 /* ---------- Ask ---------- */

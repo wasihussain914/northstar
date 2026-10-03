@@ -7,15 +7,16 @@ import { AskCard } from "./AskCard";
 import { DEMOS, runDemo } from "./demo";
 import { DestinationCard } from "./DestinationCard";
 import { RecalcBanner, Starburst } from "./Flashes";
+import { PlanCard } from "./PlanCard";
 import { ProblemScanner, type ScannedProblem } from "./ProblemScanner";
 import { RoutePanel } from "./RoutePanel";
 import { TypeBar } from "./TypeBar";
 import { LANGUAGES, speechLocale, type Lang } from "./i18n";
 import { useTrip } from "./useTrip";
 import { useTutor } from "./useTutor";
-import { setSpeechLang, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
 import { loadDataset } from "./glyphs/lib/loadDataset";
 import type { GlyphLibrary } from "./glyphs/types/handwriting";
+import { setServerTts, setSpeechLang, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
 
 const PRESETS = [
   "Solve 2(x − 3) + 4 = 10",
@@ -153,6 +154,9 @@ export default function App() {
   // Like a GPS, surface the detail when something needs attention:
   // a wrong turn opens the drawer (hints live there), and so does arriving.
   const arrived = !!tutor.result?.arrived && tutor.phase === "ready";
+
+  // Route preview: ask for the whole plan while the paper is still blank.
+  const [planDismissed, setPlanDismissed] = useState(false);
   useEffect(() => {
     if (tutor.errorLine != null) setPanelOpen(true);
   }, [tutor.errorLine != null && tutor.errorKey]);
@@ -161,7 +165,10 @@ export default function App() {
   }, [arrived]);
 
   useEffect(() => {
-    health().then((h) => setHasKey(h ? h.has_key : null));
+    health().then((h) => {
+      setHasKey(h ? h.has_key : null);
+      setServerTts(!!h?.tts);
+    });
   }, []);
 
   // Dev helper: window.northstar.write(2, "2x - 6 + 4 = 10") writes a line in a handwriting font.
@@ -213,6 +220,7 @@ export default function App() {
   const newProblem = (p: string, s: { latex: string; image: string | null } | null = null) => {
     setProblem(p);
     setScan(s);
+    setPlanDismissed(false);
     dispatch({ type: "clear" });
     setSelectedLine(null);
     setPanelOpen(false);
@@ -415,6 +423,15 @@ export default function App() {
               setScanning(true);
             }}
           />
+          {strokes.length === 0 && !planDismissed && !demoRunning && (
+            <PlanCard
+              key={problem}
+              problem={problem}
+              lang={lang}
+              voiceOn={voiceOn}
+              onClose={() => setPlanDismissed(true)}
+            />
+          )}
           <div className="board-stage">
             <StatusPill tutor={tutor} arrived={arrived} onTap={() => setPanelOpen(true)} />
             <RecalcBanner errorKey={tutor.errorKey} line={tutor.errorLine} />
@@ -440,6 +457,8 @@ export default function App() {
             </div>
             <Board
               strokes={strokes}
+              problem={problem}
+              promptStart={tutor.phase === "empty"}
               tool={tool}
               markers={tutor.markers}
               errorLine={tutor.errorLine}
@@ -513,6 +532,7 @@ function StatusPill({ tutor, arrived, onTap }: {
     : tone === "off" ? `Off route — line ${tutor.errorLine}`
     : tone === "arrived" ? "You have arrived"
     : tone === "on" ? (tutor.result!.eta_steps > 0 ? `On route · ~${tutor.result!.eta_steps} to go` : "On route")
+    : tutor.phase === "empty" ? "Start on line 1"
     : "Write one step per line";
   return (
     <button className={`status-pill tone-${tone}`} onClick={onTap} title="Show the route">

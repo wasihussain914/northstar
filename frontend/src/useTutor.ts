@@ -10,6 +10,8 @@ import { speak } from "./voice";
 const PAUSE_MS = 1200;
 /** Moving on to a fresh line means the one above is done: check it almost at once. */
 const CHECKPOINT_MS = 350;
+/** Typed lines carry exact text (no reading involved), so barely wait at all. */
+const TYPED_MS = 120;
 /** If the wrong line is the last one written, wait this long before speaking up. */
 const NUDGE_AFTER_IDLE_MS = 7000;
 
@@ -129,7 +131,9 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean, l
     const deepest = Math.max(...sigsNow.keys());
     const advanced = deepest > deepestLine.current && deepestLine.current > 0;
     deepestLine.current = deepest;
-    timer.current = window.setTimeout(run, advanced ? CHECKPOINT_MS : PAUSE_MS);
+    const typed = typedTranscript(strokes);
+    const allTyped = !!typed && [...sigsNow.keys()].every((l) => typed[l] != null);
+    timer.current = window.setTimeout(run, allTyped ? TYPED_MS : advanced ? CHECKPOINT_MS : PAUSE_MS);
     return () => window.clearTimeout(timer.current);
   }, [strokes, problem, run, sigsNow]);
 

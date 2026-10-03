@@ -15,9 +15,12 @@ def _clear(monkeypatch: pytest.MonkeyPatch) -> None:
         "NORTHSTAR_PROVIDER",
         "NORTHSTAR_MODEL",
         "NORTHSTAR_GEMINI_MODEL",
+        "NORTHSTAR_XAI_MODEL",
         "ANTHROPIC_API_KEY",
         "GEMINI_API_KEY",
         "GOOGLE_API_KEY",
+        "XAI_API_KEY",
+        "GROK_API_KEY",
     ):
         monkeypatch.delenv(name, raising=False)
     tutor._gemini = None
