@@ -56,8 +56,9 @@ cp backend/.env.example backend/.env   # then put your key in backend/.env
 ./dev.sh                               # API on :8000, app on :5173
 ```
 
-Open http://localhost:5173. **On an iPad:** connect it to the same Wi-Fi and open the `Network:` URL that Vite
-prints. The Apple Pencil gets real pressure, and fingers are ignored once you've used the pencil (palm rejection).
+Open http://localhost:5173 on this computer.
+
+**On an iPad,** this computer stays the server. Safari opens the `Network:` URL Vite prints (`npm run dev` already listens on the LAN). Board checks are same-origin `/api` requests, and Vite proxies them to the API on this machine, so the iPad never calls port 8000. For a public HTTPS link (cellular, or the Ask North Star microphone), run `ngrok http 5173` and open that URL; do not put an ngrok host in the frontend. The Apple Pencil gets real pressure. A wide touch is ignored, a palm mark that lands before the pencil is discarded, and fingers stay ignored after the pencil has been used. Details are in [IPAD.md](IPAD.md).
 
 Shortcuts: `P` pen, `E` eraser, `⌘Z` / `⇧⌘Z` undo/redo. Right-click drag also erases.
 

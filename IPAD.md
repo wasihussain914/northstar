@@ -125,7 +125,7 @@ Tailscale is the private version of the same idea: install it on the PC and the 
 
 ## On the iPad, once the page is open
 
-- Apple Pencil uses real pressure. After the pencil has touched the board, fingers are ignored so your palm does not draw.
+- Apple Pencil uses real pressure. The canvas keeps the pen pointer and drops the palm. A wide touch is ignored, and if your palm lands first that mark is discarded when the pencil touches. After the pencil has been used, fingers stay ignored.
 - The type bar at the bottom adds a step as exact text (no handwriting to misread). Pick a line in the route list to replace it.
 - **▶ Demo** plays a scripted solve if the pencil or the network misbehaves. Touching the board stops it.
 - Keyboard shortcuts (`P`, `E`, undo) are for a hardware keyboard. On the tablet, use the on-screen pen, eraser, undo, and type bar.
