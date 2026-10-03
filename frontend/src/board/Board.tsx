@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LineStatus } from "../api";
 import {
   BOARD_H,
@@ -12,6 +12,7 @@ import {
   type Point,
   type Stroke,
 } from "./geometry";
+import { questionStrokes } from "./handwriting";
 import { buildTeacherAnim, drawTeacherAnim, type TeacherAnim } from "./teacherPen";
 import { createInkContacts, notePointerDown, notePointerMove, notePointerUp } from "./palm";
 
@@ -30,6 +31,10 @@ export interface TeacherInk {
 
 interface Props {
   strokes: Stroke[];
+  /** The problem, written in the band above line 1. Not student work. */
+  problem: string;
+  /** Highlight line 1 and invite the first step. True while the paper has no student ink. */
+  promptStart: boolean;
   tool: Tool;
   markers: Map<number, Marker>;
   errorLine: number | null;
@@ -46,7 +51,7 @@ const ERASER_R = 14;
 /** Duration of the teacher-pen reveal animation in milliseconds. */
 const TEACHER_ANIM_MS = 1100;
 
-export function Board({ strokes, tool, markers, errorLine, selectedLine, teacherInk, onAdd, onErase, onSelectLine, onInteract }: Props) {
+export function Board({ strokes, problem, promptStart, tool, markers, errorLine, selectedLine, teacherInk, onAdd, onErase, onSelectLine, onInteract }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(800);
@@ -77,19 +82,43 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
   // down rather than cutting lines off, so work looks the same on every device.
   const boardW = Math.max(width, MIN_BOARD_W);
   const scale = width / boardW;
+  useEffect(() => {
+    const stage = wrapRef.current?.closest(".board-stage");
+    if (stage instanceof HTMLElement) stage.style.setProperty("--q-band", `${LINE_H * scale}px`);
+  }, [scale]);
+  // The question sits in its own band so line 1 stays the first line of work.
+  const paperH = BOARD_H + LINE_H;
+  const question = useMemo(
+    () => questionStrokes(problem, Math.max(200, boardW - 40)),
+    [problem, boardW],
+  );
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
-    const pxW = Math.round(width * dpr), pxH = Math.round(BOARD_H * scale * dpr);
+    const pxW = Math.round(width * dpr), pxH = Math.round(paperH * scale * dpr);
     if (canvas.width !== pxW || canvas.height !== pxH) {
       canvas.width = pxW;
       canvas.height = pxH;
     }
     const ctx = canvas.getContext("2d")!;
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
-    ctx.clearRect(0, 0, boardW, BOARD_H);
+    ctx.clearRect(0, 0, boardW, paperH);
+
+    ctx.fillStyle = "rgba(29, 78, 216, 0.045)";
+    ctx.fillRect(0, 0, boardW, LINE_H);
+    ctx.fillStyle = "#171b26";
+    for (const s of question) ctx.fill(strokePath(s));
+    ctx.strokeStyle = "#c5cedd";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, LINE_H + 0.5);
+    ctx.lineTo(boardW, LINE_H + 0.5);
+    ctx.stroke();
+
+    ctx.save();
+    ctx.translate(0, LINE_H);
 
     if (errorLine) {
       const y = (errorLine - 1) * LINE_H;
@@ -101,6 +130,22 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
     if (selectedLine && selectedLine !== errorLine) {
       ctx.fillStyle = "rgba(59, 130, 246, 0.07)";
       ctx.fillRect(0, (selectedLine - 1) * LINE_H, boardW, LINE_H);
+    }
+    if (promptStart && errorLine !== 1) {
+      ctx.fillStyle = "rgba(59, 130, 246, 0.08)";
+      ctx.fillRect(0, 0, boardW, LINE_H);
+      ctx.fillStyle = "rgba(29, 78, 216, 0.9)";
+      ctx.fillRect(0, 6, 3, LINE_H - 12);
+      ctx.font = '30px "Bradley Hand", "Noteworthy", "Chalkboard SE", cursive';
+      ctx.textBaseline = "middle";
+      // Leave the right side clear: the status pill sits on this line.
+      const room = boardW - 36 - 176 / Math.max(scale, 0.01);
+      const phrase = ["Write your first step here", "First step"].find((p) => ctx.measureText(p).width <= room);
+      if (phrase) {
+        ctx.fillStyle = "rgba(92, 107, 130, 0.55)";
+        ctx.fillText(phrase, 28, LINE_H * 0.5);
+      }
+      ctx.textBaseline = "alphabetic";
     }
 
     ctx.strokeStyle = "#d6deea";
@@ -144,7 +189,8 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
       ctx.arc(x, y, ERASER_R, 0, Math.PI * 2);
       ctx.stroke();
     }
-  }, [strokes, width, boardW, scale, errorLine, selectedLine]);
+    ctx.restore();
+  }, [strokes, question, width, boardW, scale, paperH, errorLine, selectedLine, promptStart]);
 
   // Scheduled frames must use the newest props, not the ones from when they were scheduled.
   const drawRef = useRef(draw);
@@ -202,7 +248,7 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
 
   const toPoint = (e: PointerEvent | React.PointerEvent, rect: DOMRect): Point => [
     (e.clientX - rect.left) / scale,
-    (e.clientY - rect.top) / scale,
+    (e.clientY - rect.top) / scale - LINE_H,
     e.pointerType === "pen" ? Math.max(0.05, e.pressure) : 0.5,
   ];
 
@@ -245,6 +291,16 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
     }
     const rect = e.currentTarget.getBoundingClientRect();
     const p = toPoint(e, rect);
+    // The question band is not a work line.
+    if (p[1] < 0) {
+      activePointer.current = null;
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // Capture was already released.
+      }
+      return;
+    }
     // The stylus's eraser end, or the right mouse button, erases.
     const erase = tool === "eraser" || e.button === 5 || e.button === 2;
     if (erase) {
@@ -323,14 +379,15 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
 
   return (
     <div className="board-scroll">
-      <div className={`board${scale < 0.7 ? " compact" : ""}`} style={{ height: BOARD_H * scale }}>
+      <div className={`board${scale < 0.7 ? " compact" : ""}`} style={{ height: paperH * scale }}>
         <div className="gutter">
+          <div className="gutter-question" style={{ height: LINE_H * scale }} aria-hidden="true">Q</div>
           {Array.from({ length: LINES }, (_, i) => i + 1).map((line) => {
             const m = markers.get(line);
             return (
               <button
                 key={line}
-                className={`gutter-row${selectedLine === line ? " selected" : ""}${m ? ` has-${m.status}` : ""}`}
+                className={`gutter-row${selectedLine === line ? " selected" : ""}${promptStart && line === 1 ? " prompt" : ""}${m ? ` has-${m.status}` : ""}`}
                 style={{ height: LINE_H * scale }}
                 onClick={() => m && onSelectLine(line)}
                 disabled={!m}
@@ -347,7 +404,7 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
           <canvas
             ref={canvasRef}
             className={`ink tool-${tool}`}
-            style={{ width, height: BOARD_H * scale }}
+            style={{ width, height: paperH * scale }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={finish}
