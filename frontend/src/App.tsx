@@ -24,6 +24,7 @@ import { setServerTts, setSpeechLang, speechSupported, stopSpeaking, unlockSpeec
 
 const PRESETS = [
   "Solve 2(x − 3) + 4 = 10",
+  "Prove: the distance of a linear code C equals the minimum weight of its nonzero codewords",
   "Differentiate x³ − 3x² + 2x",
   "Solve 3(x + 2) − 5 = 2x + 9",
   "Solve −2x + 4 > 10",
