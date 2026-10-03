@@ -18,13 +18,31 @@ MODEL = "fake-vision"
 def _problem_math(problem: str) -> str:
     # "Differentiate <f>" becomes the dialect diff(<f>, x) so the real domain
     # checkers run even in fake mode (the demo script relies on this).
-    m = re.match(r"^\s*(differentiate|derivative of)\s*:?\s*(.+)$", problem, flags=re.I)
-    if m:
-        body = m.group(2).strip()
+    text = problem.strip()
+    lower = text.lower()
+
+    body = ""
+    for prefix in ("differentiate", "derivative of"):
+        if lower.startswith(prefix):
+            body = text[len(prefix):].lstrip()
+            if body.startswith(":"):
+                body = body[1:].lstrip()
+            break
+    if body:
         letters = sorted(set(re.findall(r"[a-z]", body))) or ["x"]
         return f"diff({body}, {letters[0]})"
-    text = re.sub(r"^\s*(solve|simplify|expand|factor)\s*:?\s*", "", problem, flags=re.I)
-    return re.sub(r"\s+for\s+[a-z]\s*$", "", text, flags=re.I).strip()
+
+    for prefix in ("solve", "simplify", "expand", "factor"):
+        if lower.startswith(prefix):
+            text = text[len(prefix):].lstrip()
+            if text.startswith(":"):
+                text = text[1:].lstrip()
+            break
+
+    parts = text.rsplit(" for ", 1)
+    if len(parts) == 2 and len(parts[1].strip()) == 1 and parts[1].strip().isalpha():
+        text = parts[0]
+    return text.strip()
 
 
 def _kind(text: str) -> str:
