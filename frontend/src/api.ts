@@ -15,8 +15,12 @@ export interface CheckResult {
   lines: CheckedLine[];
   first_error: number | null;
   hints: string[];
+  /** ≤4-word teacher margin notes, one per hint level. */
+  hint_ink: string[];
   spoken_nudge: string;
   next_step_hint: string;
+  /** ≤4-word teacher margin note matching next_step_hint. */
+  next_step_ink: string;
   on_track_message: string;
   eta_steps: number;
   route_note: string;
@@ -25,8 +29,12 @@ export interface CheckResult {
   timing_ms: { read: number; total: number };
 }
 
+/** Hostname of the FastAPI process. Unset/empty → this machine (teammate default). */
+// const API_HOST = String(import.meta.env.VITE_BACKEND_IP ?? "").trim() || "localhost";
+// const API_BASE = `http://${API_HOST}:5173`;
+const API_BASE = ""
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -68,7 +76,7 @@ export function readProblem(image: string) {
 
 export async function health(): Promise<{ ok: boolean; has_key: boolean; fake?: boolean } | null> {
   try {
-    const res = await fetch("/api/health");
+    const res = await fetch(`${API_BASE}/api/health`);
     return res.ok ? res.json() : null;
   } catch {
     return null;

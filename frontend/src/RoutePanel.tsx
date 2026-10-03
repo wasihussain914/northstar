@@ -16,14 +16,18 @@ interface Props {
   onSelectLine: (line: number) => void;
   voiceOn: boolean;
   trip: Trip;
-  onHint: () => void;
+  /** Last ruled line that currently has student ink. */
+  lastInkLine: number | null;
+  /** Called when the student requests a hint. Passes the ink phrase and target
+   *  line so the board can animate a teacher-pen annotation. */
+  onHint: (inkPhrase?: string, inkLine?: number) => void;
   onNewTrip: () => void;
   /** Button label on the trip summary ("New problem", "Next stop · 2 of 4"). */
   nextLabel?: string;
   children?: React.ReactNode;
 }
 
-export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, onHint, onNewTrip, nextLabel, children }: Props) {
+export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, lastInkLine, onHint, onNewTrip, nextLabel, children }: Props) {
   const { result, errorLine, errorKey, phase, failure } = tutor;
   const [hintsShown, setHintsShown] = useState(0);
   const [showNext, setShowNext] = useState(false);
@@ -34,9 +38,14 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
   const reveal = () => {
     const next = Math.min(hintsShown + 1, result?.hints.length ?? 0);
     setHintsShown(next);
-    onHint();
-    const text = result?.hints[next - 1];
-    if (voiceOn && text) speak(text);
+    const hintText = result?.hints[next - 1];
+    // Use the server's short margin note, or fall back to the first four words
+    // of the hint text so the pen always has something to write.
+    const inkPhrase =
+      result?.hint_ink?.[next - 1] ||
+      (hintText ? hintText.split(" ").slice(0, 4).join(" ") : undefined);
+    onHint(inkPhrase, errorLine ?? undefined);
+    if (voiceOn && hintText) speak(hintText);
   };
 
   return (
@@ -86,8 +95,13 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
               className="btn ghost wide"
               onClick={() => {
                 setShowNext(true);
-                onHint();
-                if (voiceOn) speak(result.next_step_hint);
+                const nextHintText = result.next_step_hint;
+                // Ink phrase: server-provided short note or first four words of text.
+                const inkPhrase =
+                  result.next_step_ink ||
+                  (nextHintText ? nextHintText.split(" ").slice(0, 4).join(" ") : undefined);
+                onHint(inkPhrase, lastInkLine ?? undefined);
+                if (voiceOn) speak(nextHintText);
               }}
             >
               Stuck? Where do I go next?

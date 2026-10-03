@@ -12,6 +12,8 @@ import {
   type Point,
   type Stroke,
 } from "./geometry";
+import { buildTeacherAnim, drawTeacherAnim, type TeacherAnim } from "./teacherPen";
+import { createInkContacts, notePointerDown, notePointerMove, notePointerUp } from "./palm";
 
 export type Tool = "pen" | "eraser";
 
@@ -20,12 +22,20 @@ export interface Marker {
   source?: "verified" | "ai";
 }
 
+/** A teacher-pen note to animate on the board. Set to null to clear. */
+export interface TeacherInk {
+  phrase: string;
+  line: number;
+}
+
 interface Props {
   strokes: Stroke[];
   tool: Tool;
   markers: Map<number, Marker>;
   errorLine: number | null;
   selectedLine: number | null;
+  /** When set, animates red teacher handwriting beside that line. */
+  teacherInk: TeacherInk | null;
   onAdd: (s: Stroke) => void;
   onErase: (ids: number[]) => void;
   onSelectLine: (line: number) => void;
@@ -33,8 +43,10 @@ interface Props {
 }
 
 const ERASER_R = 14;
+/** Duration of the teacher-pen reveal animation in milliseconds. */
+const TEACHER_ANIM_MS = 1100;
 
-export function Board({ strokes, tool, markers, errorLine, selectedLine, onAdd, onErase, onSelectLine, onInteract }: Props) {
+export function Board({ strokes, tool, markers, errorLine, selectedLine, teacherInk, onAdd, onErase, onSelectLine, onInteract }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(800);
@@ -43,10 +55,15 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, onAdd, 
   const erasing = useRef<Set<number> | null>(null);
   // A finished stroke stays drawn from here until it arrives back in `strokes`.
   const committing = useRef<Stroke | null>(null);
-  const penSeen = useRef(false);
+  const contacts = useRef(createInkContacts());
   const activePointer = useRef<number | null>(null);
   const eraserPos = useRef<[number, number] | null>(null);
   const frame = useRef(0);
+
+  // Teacher ink animation state (refs so they don't re-trigger draw useCallback)
+  const teacherAnimRef = useRef<TeacherAnim | null>(null);
+  const teacherRevealRef = useRef(0);
+  const teacherRafRef = useRef(0);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -112,6 +129,13 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, onAdd, 
       ctx.fillStyle = "#171b26";
       ctx.fill(outlinePath(live.current.points, live.current.pen, false));
     }
+
+    // Red teacher annotation (drawn after student ink, excluded from snapshots)
+    const tAnim = teacherAnimRef.current;
+    if (tAnim && teacherRevealRef.current > 0) {
+      drawTeacherAnim(ctx, tAnim, teacherRevealRef.current);
+    }
+
     if (eraserPos.current) {
       const [x, y] = eraserPos.current;
       ctx.strokeStyle = "rgba(23, 27, 38, 0.45)";
@@ -135,21 +159,90 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, onAdd, 
     draw();
   }, [draw]);
 
+  // Animate teacher ink whenever the hint changes.
+  // We intentionally capture `strokes` and `boardW` at the moment teacherInk
+  // is set (i.e. when the student clicked "Give me a hint"), so the note is
+  // placed relative to the ink that was on screen at that instant.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    cancelAnimationFrame(teacherRafRef.current);
+    if (!teacherInk) {
+      teacherAnimRef.current = null;
+      teacherRevealRef.current = 0;
+      requestDraw();
+      return;
+    }
+
+    const anim = buildTeacherAnim(teacherInk.phrase, teacherInk.line, strokes, boardW);
+    teacherAnimRef.current = anim;
+    teacherRevealRef.current = 0;
+
+    if (!anim || anim.totalPoints === 0) {
+      requestDraw();
+      return;
+    }
+
+    const startTime = performance.now();
+    const tick = () => {
+      const elapsed = performance.now() - startTime;
+      const r = Math.min(
+        Math.round((elapsed / TEACHER_ANIM_MS) * anim.totalPoints),
+        anim.totalPoints,
+      );
+      teacherRevealRef.current = r;
+      requestDraw();
+      if (r < anim.totalPoints) {
+        teacherRafRef.current = requestAnimationFrame(tick);
+      }
+    };
+    teacherRafRef.current = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(teacherRafRef.current);
+  }, [teacherInk]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const toPoint = (e: PointerEvent | React.PointerEvent, rect: DOMRect): Point => [
     (e.clientX - rect.left) / scale,
     (e.clientY - rect.top) / scale,
     e.pointerType === "pen" ? Math.max(0.05, e.pressure) : 0.5,
   ];
 
+  const dropActiveStroke = () => {
+    live.current = null;
+    erasing.current = null;
+    activePointer.current = null;
+    eraserPos.current = null;
+  };
+
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     onInteract();
-    if (e.pointerType === "pen") penSeen.current = true;
-    // Palm rejection: once a stylus has been used, ignore fingers on the board.
-    if (e.pointerType === "touch" && penSeen.current) return;
+    const { palm, preempt } = notePointerDown(
+      contacts.current,
+      e.pointerId,
+      e.pointerType,
+      e.width,
+      e.height,
+    );
+    // The palm often lands first and would steal the only drawing pointer.
+    // When the pencil follows, that touch stroke is discarded and the pen draws.
+    if (preempt && activePointer.current !== null && activePointer.current !== e.pointerId) {
+      dropActiveStroke();
+    }
+    if (palm) {
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        // Already gone. pointerup still clears the contact when it arrives here.
+      }
+      return;
+    }
     if (activePointer.current !== null) return;
     e.preventDefault();
     activePointer.current = e.pointerId;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // The pointer is already gone. The stroke still records from the events we have.
+    }
     const rect = e.currentTarget.getBoundingClientRect();
     const p = toPoint(e, rect);
     // The stylus's eraser end, or the right mouse button, erases.
@@ -170,6 +263,20 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, onAdd, 
       eraserPos.current = [p[0], p[1]];
       requestDraw();
     }
+    if (
+      notePointerMove(contacts.current, e.pointerId, e.pointerType, e.width, e.height) &&
+      e.pointerId === activePointer.current
+    ) {
+      // A palm contact often starts small and grows. Drop it before it becomes ink.
+      dropActiveStroke();
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // Capture was already released.
+      }
+      requestDraw();
+      return;
+    }
     if (e.pointerId !== activePointer.current) return;
     const events = e.nativeEvent.getCoalescedEvents?.() ?? [e.nativeEvent];
     for (const ev of events.length ? events : [e.nativeEvent]) {
@@ -185,6 +292,7 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, onAdd, 
   };
 
   const finish = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    notePointerUp(contacts.current, e.pointerId);
     if (e.pointerId !== activePointer.current) return;
     activePointer.current = null;
     if (erasing.current) {

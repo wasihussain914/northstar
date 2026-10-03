@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-(cd backend && uv run uvicorn main:app --port 8000 --reload) &
+(cd backend && uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload) &
 API=$!
 trap 'kill $API 2>/dev/null' EXIT
 
