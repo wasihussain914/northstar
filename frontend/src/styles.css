@@ -2007,7 +2007,7 @@ canvas.ink.tool-eraser {
 
 .pip {
   position: absolute;
-  right: 78px; /* just left of the floating board tools */
+  right: 14px;
   bottom: 12px;
   z-index: 7;
   width: 128px;
@@ -2374,14 +2374,14 @@ canvas.ink.tool-eraser {
   to { transform: rotate(360deg); }
 }
 
-/* When the route drawer slides over the board (below the docked-sidebar
-   breakpoint), Pip hops out to stand just left of it, above the dimmed
-   backdrop, so his reaction to a wrong turn stays visible. Phones have no
-   room beside a near-full-width drawer, so he stays put there. */
-@media (min-width: 700px) and (max-width: 1439px) {
+/* When the route drawer slides over the board, Pip hops out to stand just
+   left of it, above the dimmed backdrop, so his reaction to a wrong turn
+   stays visible. Phones have no room beside a near-full-width drawer, so he
+   stays put there. (The drawer floats 16px in from the right edge.) */
+@media (min-width: 700px) {
   .pip.beside-drawer {
     position: fixed;
-    right: calc(min(400px, 94vw) + 12px);
+    right: calc(min(380px, 100vw - 32px) + 16px + 12px + env(safe-area-inset-right));
     bottom: calc(20px + env(safe-area-inset-bottom));
     z-index: 32;
     animation: pip-step-aside 0.35s cubic-bezier(0.3, 1.4, 0.6, 1);
