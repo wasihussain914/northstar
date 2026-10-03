@@ -111,6 +111,24 @@ EXPLAIN_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+PROBLEM_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "problem": _str("The problem as one short line of plain text, e.g. 'Solve 2(x − 3) + 4 = 10'"),
+        "latex": _str("Just the math as LaTeX (no surrounding $), or empty if there is none"),
+    },
+    "required": ["problem", "latex"],
+    "additionalProperties": False,
+}
+
+READ_PROBLEM = """The image is a crop of a student's homework (a photo or a PDF page) showing the problem they \
+are about to work on. Read it and return:
+- problem: the problem as one short line of plain text the app can display and reuse, keeping the instruction \
+word if there is one ("Solve", "Simplify", ...) and adding a fitting one if there isn't.
+- latex: just the math as LaTeX, no surrounding $.
+If the crop shows more than one problem, pick the most prominent or first one. If it isn't a math problem at \
+all, return an empty problem."""
+
 
 async def _structured(content: list[dict] | str, schema: dict, max_tokens: int = 8000) -> dict:
     try:
@@ -168,6 +186,14 @@ async def read_board(problem: str, image_png_b64: str, line_numbers: list[int],
         {"type": "text", "text": text},
     ]
     return await _structured(content, BOARD_SCHEMA)
+
+
+async def read_problem(image_png_b64: str) -> dict:
+    content = [
+        {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": image_png_b64}},
+        {"type": "text", "text": READ_PROBLEM},
+    ]
+    return await _structured(content, PROBLEM_SCHEMA, max_tokens=2000)
 
 
 ASK_INSTRUCTIONS = """The student just asked you a question out loud while working. Answer it as North Star: \

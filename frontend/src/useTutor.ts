@@ -7,6 +7,8 @@ import { speak } from "./voice";
 
 /** How long the pen must rest before we look at the board. */
 const PAUSE_MS = 1200;
+/** Moving on to a fresh line means the one above is done: check it almost at once. */
+const CHECKPOINT_MS = 350;
 /** If the wrong line is the last one written, wait this long before speaking up. */
 const NUDGE_AFTER_IDLE_MS = 7000;
 
@@ -108,20 +110,26 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean): 
     }
   };
 
-  // Look at the board once the pen has rested.
+  // Look at the board once the pen has rested — or right away at a checkpoint,
+  // when the student has just started writing on a line below their work.
+  const deepestLine = useRef(0);
   useEffect(() => {
     window.clearTimeout(timer.current);
     window.clearTimeout(nudgeTimer.current);
     if (strokes.length === 0) {
+      deepestLine.current = 0;
       setResult(null);
       setCheckedSigs(new Map());
       setFailure(null);
       voice.current = { errorKey: "", hadError: false, arrived: false };
       return;
     }
-    timer.current = window.setTimeout(run, PAUSE_MS);
+    const deepest = Math.max(...sigsNow.keys());
+    const advanced = deepest > deepestLine.current && deepestLine.current > 0;
+    deepestLine.current = deepest;
+    timer.current = window.setTimeout(run, advanced ? CHECKPOINT_MS : PAUSE_MS);
     return () => window.clearTimeout(timer.current);
-  }, [strokes, problem, run]);
+  }, [strokes, problem, run, sigsNow]);
 
   useEffect(() => {
     voice.current.arrived = false;

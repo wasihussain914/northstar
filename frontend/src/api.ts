@@ -59,6 +59,11 @@ export function askTutor(req: {
   return post<{ answer: string }>("/api/ask", req);
 }
 
+/** Read the problem off a cropped photo of homework. */
+export function readProblem(image: string) {
+  return post<{ problem: string; latex: string }>("/api/problem", { image });
+}
+
 export async function health(): Promise<{ ok: boolean; has_key: boolean; fake?: boolean } | null> {
   try {
     const res = await fetch("/api/health");

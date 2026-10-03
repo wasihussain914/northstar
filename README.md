@@ -9,7 +9,10 @@ Built for Cornell Hacks 2026 (theme: **Navigation**).
 ## How it works
 
 ```
- you write ──▶ pause ~1.2s ──▶ board snapshot (lines labeled 1, 2, 3…)
+ 📷 scan homework (photo or PDF) ──▶ box the problem ──▶ Claude reads it
+                                   │            = your destination
+                                   ▼
+ you write ──▶ new line? ~0.35s / pause ~1.2s ──▶ board snapshot (lines labeled 1, 2, 3…)
                                    │
                                    ▼
                      Claude Sonnet 5.5 (vision) reads each line 
@@ -39,6 +42,11 @@ Built for Cornell Hacks 2026 (theme: **Navigation**).
   gives the final answer.
 
 Also:
+- **Scan your homework.** Take a photo of the worksheet (or open a photo/PDF), drag a box around the problem
+  you're on, and Claude reads it into the destination card — the crop of your actual homework stays pinned above
+  the paper while you work. Multi-page PDFs have page arrows; editing the transcription by hand is one tap.
+- **Checkpoints.** The moment you start a new line, the line you just finished is checked (~0.35s), so wrong
+  turns surface while your pen is still moving. A ~1.2s pause checks everything else.
 - **Ask North Star.** Tap the mic (or type) to ask "why is line 2 wrong?". Claude sees the board and the last
   check, and answers out loud in at most three sentences, never with the final answer.
 - **Trip summary** on arrival: steps, wrong turns (stale lines after a fix don't count), hints used, time.
@@ -79,10 +87,11 @@ are plain templates. Hand-drawn strokes can't be read in this mode.
 | Path | What |
 |---|---|
 | `backend/verify.py` | SymPy step checker (sanitized parsing, equivalence, lost/extra solutions) |
-| `backend/tutor.py` | Claude calls: read the board, explain a SymPy-flagged line |
-| `backend/main.py` | FastAPI: `/api/check` merges both; SymPy runs in killable worker processes |
+| `backend/tutor.py` | Claude calls: read the board, explain a flagged line, read a scanned problem |
+| `backend/main.py` | FastAPI: `/api/check` merges both, `/api/problem` reads a homework crop; SymPy runs in killable worker processes |
 | `frontend/src/board/` | Ruled whiteboard canvas, stroke → line mapping, the labeled snapshot sent to Claude |
-| `frontend/src/useTutor.ts` | Pause detection, request handling, the voice policy |
+| `frontend/src/ProblemScanner.tsx` | Photo/PDF import and the crop-the-problem sheet |
+| `frontend/src/useTutor.ts` | Checkpoint & pause detection, request handling, the voice policy |
 | `frontend/src/RoutePanel.tsx` | Status, hint ladder, route view |
 
 Dev helper (in the browser console while running `npm run dev`):

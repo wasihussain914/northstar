@@ -197,6 +197,23 @@ async def check(req: CheckRequest) -> dict:
     return result
 
 
+class ProblemRequest(BaseModel):
+    image: str = Field(description="PNG, base64 (a data: URL prefix is fine)", max_length=12_000_000)
+
+
+@app.post("/api/problem")
+async def problem(req: ProblemRequest) -> dict:
+    """Read the problem off a cropped photo of the student's homework."""
+    image, _ = decode_png(req.image)
+    try:
+        out = await (fake_tutor if FAKE_VISION else tutor).read_problem(image)
+    except tutor.TutorError as exc:
+        raise HTTPException(502, str(exc))
+    if not out.get("problem"):
+        raise HTTPException(422, "Couldn't find a math problem in that crop. Try a tighter one.")
+    return {"problem": out["problem"], "latex": out.get("latex", "")}
+
+
 class AskRequest(BaseModel):
     problem: str = Field(default="", max_length=500)
     question: str = Field(min_length=1, max_length=500)

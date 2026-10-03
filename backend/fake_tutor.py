@@ -45,6 +45,11 @@ async def read_board(problem: str, transcript: dict[int, str] | None, lines: lis
     }
 
 
+async def read_problem(image_png_b64: str) -> dict:
+    # No vision here; hand back a known problem so the capture flow can be tested free.
+    return {"problem": "Solve 2(x - 3) + 4 = 10", "latex": "2(x - 3) + 4 = 10"}
+
+
 async def explain_line(problem: str, lines: list[dict], line: int, detail: str, note: str = "") -> dict:
     # `detail` can contain solution values; only the student-safe `note` is used.
     return {

@@ -5,6 +5,8 @@ import { LINES, lineOf, type Stroke } from "./board/geometry";
 import { textToStrokes } from "./board/handwriting";
 import { AskCard } from "./AskCard";
 import { DEMOS, runDemo } from "./demo";
+import { DestinationCard } from "./DestinationCard";
+import { ProblemScanner, type ScannedProblem } from "./ProblemScanner";
 import { RoutePanel } from "./RoutePanel";
 import { TypeBar } from "./TypeBar";
 import { useTrip } from "./useTrip";
@@ -68,6 +70,9 @@ export default function App() {
   const [{ present: strokes, past, future }, dispatch] = useReducer(history, { past: [], present: [], future: [] });
   const [tool, setTool] = useState<Tool>("pen");
   const [problem, setProblem] = useState(PRESETS[0]);
+  // Set when the problem came off real homework: the crop and its LaTeX.
+  const [scan, setScan] = useState<{ latex: string; image: string } | null>(null);
+  const [scanning, setScanning] = useState(false);
   const [voiceOn, setVoiceOn] = useState(speechSupported);
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
   const [hasKey, setHasKey] = useState<boolean | null>(null);
@@ -89,7 +94,10 @@ export default function App() {
       erase: (line: number) =>
         dispatch({ type: "erase", ids: strokesRef.current.filter((s) => lineOf(s) === line).map((s) => s.id) }),
       clear: () => dispatch({ type: "clear" }),
-      problem: setProblem,
+      problem: (p: string) => {
+        setProblem(p);
+        setScan(null);
+      },
     };
   }, []);
 
@@ -117,10 +125,23 @@ export default function App() {
     setVoiceOn(!voiceOn);
   };
 
-  const newProblem = (p: string) => {
+  const newProblem = (p: string, s: { latex: string; image: string } | null = null) => {
     setProblem(p);
+    setScan(s);
     dispatch({ type: "clear" });
     setSelectedLine(null);
+  };
+
+  const useScan = ({ problem: p, latex, image }: ScannedProblem) => {
+    stopDemo();
+    setScanning(false);
+    newProblem(p, { latex, image });
+  };
+
+  // Editing a scanned problem's text drops the stale LaTeX but keeps the snap.
+  const editProblem = (p: string) => {
+    setProblem(p);
+    setScan((s) => (s ? { ...s, latex: "" } : s));
   };
 
   const onSelectLine = useCallback((line: number) => setSelectedLine((cur) => (cur === line ? null : line)), []);
@@ -152,7 +173,10 @@ export default function App() {
     setSelectedLine(null);
     const script = DEMOS.find((d) => d.problem === problem) ?? DEMOS[0];
     runDemo(script, {
-      setProblem,
+      setProblem: (p) => {
+        setProblem(p);
+        setScan(null);
+      },
       clear: () => dispatch({ type: "clear" }),
       add: (s) => dispatch({ type: "addMany", strokes: s }),
       eraseLine: (line) =>
@@ -181,40 +205,29 @@ export default function App() {
           <span>North Star</span>
         </div>
 
-        <label className="destination">
-          <span className="destination-label">Problem</span>
-          <input
-            value={problem}
-            onChange={(e) => setProblem(e.target.value)}
-            placeholder="Type a problem, e.g. Solve 3(x − 2) + 5 = 2x + 9"
-            list="presets"
-            spellCheck={false}
-          />
-          <datalist id="presets">
-            {PRESETS.map((p) => (
-              <option key={p} value={p} />
-            ))}
-          </datalist>
-        </label>
+        <div className="presets" aria-label="Example problems">
+          <button
+            className={`chip demo${demoRunning ? " running" : ""}`}
+            onClick={demoRunning ? stopDemo : startDemo}
+            title="Watch North Star guide a solve, mistakes included"
+          >
+            {demoRunning ? "■ Stop demo" : "▶ Demo"}
+          </button>
+          {PRESETS.map((p) => (
+            <button
+              key={p}
+              className={`chip${p === problem ? " active" : ""}`}
+              onClick={() => {
+                stopDemo();
+                newProblem(p);
+              }}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
 
-        <div className="tools" role="toolbar" aria-label="Board tools">
-          <ToolButton active={tool === "pen"} onClick={() => setTool("pen")} label="Pen (P)">
-            <path d="M4 16l1-4 8.5-8.5a2.1 2.1 0 013 3L8 15l-4 1z" />
-          </ToolButton>
-          <ToolButton active={tool === "eraser"} onClick={() => setTool("eraser")} label="Eraser (E)">
-            <path d="M7.5 16h9M3.8 11.8l7-7a1.8 1.8 0 012.5 0l2.9 2.9a1.8 1.8 0 010 2.5L10 16.4H7.6l-3.8-3.8a.6.6 0 010-.8z" />
-          </ToolButton>
-          <span className="divider" />
-          <ToolButton onClick={() => dispatch({ type: "undo" })} disabled={!past.length} label="Undo (⌘Z)">
-            <path d="M7 5L3 9l4 4M3.5 9H12a5 5 0 010 10H9" />
-          </ToolButton>
-          <ToolButton onClick={() => dispatch({ type: "redo" })} disabled={!future.length} label="Redo (⇧⌘Z)">
-            <path d="M13 5l4 4-4 4M16.5 9H8a5 5 0 000 10h3" />
-          </ToolButton>
-          <ToolButton onClick={() => dispatch({ type: "clear" })} disabled={!strokes.length} label="Clear board">
-            <path d="M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11" />
-          </ToolButton>
-          <span className="divider" />
+        <div className="topbar-actions">
           {speechSupported && (
             <ToolButton active={voiceOn} onClick={toggleVoice} label={voiceOn ? "Voice on" : "Voice off"}>
               {voiceOn ? (
@@ -238,41 +251,51 @@ export default function App() {
 
       <main className="workspace">
         <section className="board-area">
-          <div className="presets" aria-label="Example problems">
-            <button
-              className={`chip demo${demoRunning ? " running" : ""}`}
-              onClick={demoRunning ? stopDemo : startDemo}
-              title="Watch North Star guide a solve, mistakes included"
-            >
-              {demoRunning ? "■ Stop demo" : "▶ Demo"}
-            </button>
-            {PRESETS.map((p) => (
-              <button
-                key={p}
-                className={`chip${p === problem ? " active" : ""}`}
-                onClick={() => {
-                  stopDemo();
-                  newProblem(p);
-                }}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-          <Board
-            strokes={strokes}
-            tool={tool}
-            markers={tutor.markers}
-            errorLine={tutor.errorLine}
-            selectedLine={selectedLine}
-            onAdd={(stroke) => dispatch({ type: "add", stroke })}
-            onErase={(ids) => dispatch({ type: "erase", ids })}
-            onSelectLine={onSelectLine}
-            onInteract={() => {
-              unlockSpeech();
+          <DestinationCard
+            problem={problem}
+            latex={scan?.latex ?? ""}
+            image={scan?.image ?? null}
+            onEdit={editProblem}
+            onScan={() => {
               stopDemo();
+              setScanning(true);
             }}
           />
+          <div className="board-stage">
+            <div className="float-tools" role="toolbar" aria-label="Board tools">
+              <ToolButton active={tool === "pen"} onClick={() => setTool("pen")} label="Pen (P)">
+                <path d="M4 16l1-4 8.5-8.5a2.1 2.1 0 013 3L8 15l-4 1z" />
+              </ToolButton>
+              <ToolButton active={tool === "eraser"} onClick={() => setTool("eraser")} label="Eraser (E)">
+                <path d="M7.5 16h9M3.8 11.8l7-7a1.8 1.8 0 012.5 0l2.9 2.9a1.8 1.8 0 010 2.5L10 16.4H7.6l-3.8-3.8a.6.6 0 010-.8z" />
+              </ToolButton>
+              <span className="float-divider" />
+              <ToolButton onClick={() => dispatch({ type: "undo" })} disabled={!past.length} label="Undo (⌘Z)">
+                <path d="M7 5L3 9l4 4M3.5 9H12a5 5 0 010 10H9" />
+              </ToolButton>
+              <ToolButton onClick={() => dispatch({ type: "redo" })} disabled={!future.length} label="Redo (⇧⌘Z)">
+                <path d="M13 5l4 4-4 4M16.5 9H8a5 5 0 000 10h3" />
+              </ToolButton>
+              <span className="float-divider" />
+              <ToolButton onClick={() => dispatch({ type: "clear" })} disabled={!strokes.length} label="Clear board">
+                <path d="M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11" />
+              </ToolButton>
+            </div>
+            <Board
+              strokes={strokes}
+              tool={tool}
+              markers={tutor.markers}
+              errorLine={tutor.errorLine}
+              selectedLine={selectedLine}
+              onAdd={(stroke) => dispatch({ type: "add", stroke })}
+              onErase={(ids) => dispatch({ type: "erase", ids })}
+              onSelectLine={onSelectLine}
+              onInteract={() => {
+                unlockSpeech();
+                stopDemo();
+              }}
+            />
+          </div>
           <TypeBar line={typeTarget} replacing={typeTarget != null && usedLines.has(typeTarget)} onSubmit={typeStep} />
         </section>
         <RoutePanel
@@ -288,6 +311,8 @@ export default function App() {
           <AskCard problem={problem} strokes={strokes} result={tutor.result} voiceOn={voiceOn} />
         </RoutePanel>
       </main>
+
+      {scanning && <ProblemScanner onUse={useScan} onClose={() => setScanning(false)} />}
     </div>
   );
 }
