@@ -14,7 +14,7 @@ import { TypeBar } from "./TypeBar";
 import { LANGUAGES, speechLocale, type Lang } from "./i18n";
 import { useTrip } from "./useTrip";
 import { useTutor } from "./useTutor";
-import { setSpeechLang, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
+import { setServerTts, setSpeechLang, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
 
 const PRESETS = [
   "Solve 2(x − 3) + 4 = 10",
@@ -140,7 +140,10 @@ export default function App() {
   }, [arrived]);
 
   useEffect(() => {
-    health().then((h) => setHasKey(h ? h.has_key : null));
+    health().then((h) => {
+      setHasKey(h ? h.has_key : null);
+      setServerTts(!!h?.tts);
+    });
   }, []);
 
   // Dev helper: window.northstar.write(2, "2x - 6 + 4 = 10") writes a line in a handwriting font.

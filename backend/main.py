@@ -18,11 +18,13 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 load_dotenv(Path(__file__).with_name(".env"))
 
 import fake_tutor  # noqa: E402
+import tts  # noqa: E402
 import tutor  # noqa: E402  (needs the env loaded first)
 import verify  # noqa: E402
 
@@ -159,6 +161,7 @@ async def health() -> dict:
     return {"ok": True, "has_key": FAKE_VISION or tutor.has_api_key(),
             "model": fake_tutor.MODEL if FAKE_VISION else tutor.active_model(),
             "provider": "fake" if FAKE_VISION else ("gemini" if tutor.using_gemini() else "claude"),
+            "tts": tts.enabled(),
             "fake": FAKE_VISION}
 
 
@@ -247,6 +250,22 @@ async def problem(req: ProblemRequest) -> dict:
     if not problems:
         raise HTTPException(422, "Couldn't find a math problem in that crop. Try a tighter one.")
     return {"problems": problems}
+
+
+class SpeakRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=600)
+
+
+@app.post("/api/speak")
+async def speak(req: SpeakRequest) -> Response:
+    """The GPS voice as neural audio. 503 when no TTS key: use browser speech."""
+    if not tts.enabled():
+        raise HTTPException(503, "No ELEVENLABS_API_KEY on the server; use browser speech.")
+    try:
+        audio = await tts.speak(req.text)
+    except Exception as exc:
+        raise HTTPException(502, f"Text-to-speech failed: {exc}")
+    return Response(content=audio, media_type="audio/mpeg")
 
 
 class PlanRequest(BaseModel):

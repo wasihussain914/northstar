@@ -84,7 +84,7 @@ export function readProblem(image: string) {
   return post<{ problems: { problem: string; latex: string }[] }>("/api/problem", { image });
 }
 
-export async function health(): Promise<{ ok: boolean; has_key: boolean; fake?: boolean } | null> {
+export async function health(): Promise<{ ok: boolean; has_key: boolean; tts?: boolean; fake?: boolean } | null> {
   try {
     const res = await fetch(`${API_BASE}/api/health`);
     return res.ok ? res.json() : null;
