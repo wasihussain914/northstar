@@ -1282,19 +1282,14 @@ canvas.ink.tool-eraser {
 
 /* ---------- Plan your route ---------- */
 
+/* In flow above the paper, so it never blocks the pen. */
 .plan-card {
-  position: absolute;
-  top: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 6;
-  width: min(600px, calc(100% - 96px));
-  background: rgba(16, 23, 45, 0.95);
-  backdrop-filter: blur(14px);
+  position: relative;
+  flex-shrink: 0;
+  background: var(--bg-raised);
   border: 1px solid rgba(245, 196, 81, 0.35);
   border-radius: 16px;
-  padding: 16px 18px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  padding: 12px 16px;
   animation: rise 0.3s ease-out;
 }
 

@@ -386,19 +386,19 @@ export default function App() {
               setScanning(true);
             }}
           />
+          {strokes.length === 0 && !planDismissed && !demoRunning && (
+            <PlanCard
+              key={problem}
+              problem={problem}
+              lang={lang}
+              voiceOn={voiceOn}
+              onClose={() => setPlanDismissed(true)}
+            />
+          )}
           <div className="board-stage">
             <StatusPill tutor={tutor} arrived={arrived} onTap={() => setPanelOpen(true)} />
             <RecalcBanner errorKey={tutor.errorKey} line={tutor.errorLine} />
             <Starburst fireKey={arrived ? problem : ""} />
-            {strokes.length === 0 && !planDismissed && !demoRunning && (
-              <PlanCard
-                key={problem}
-                problem={problem}
-                lang={lang}
-                voiceOn={voiceOn}
-                onClose={() => setPlanDismissed(true)}
-              />
-            )}
             <div className="float-tools" role="toolbar" aria-label="Board tools">
               <ToolButton active={tool === "pen"} onClick={() => setTool("pen")} label="Pen (P)">
                 <path d="M4 16l1-4 8.5-8.5a2.1 2.1 0 013 3L8 15l-4 1z" />
