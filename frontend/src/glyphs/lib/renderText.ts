@@ -172,18 +172,16 @@ export function layoutText(
       continue;
     }
 
-    // Random variation
-    const glyphScale = 1 - SCALE_JITTER + rng() * SCALE_JITTER * 2;
-    const rotationRad = (-ROTATION_JITTER_DEG + rng() * ROTATION_JITTER_DEG * 2) * DEG_TO_RAD;
-    const verticalOffset = (-VERTICAL_JITTER_PX + rng() * VERTICAL_JITTER_PX * 2);
-
-    const scaledHeight = fontHeight * glyphScale;
-
-    // Find glyph variant — hardcoded shapes take priority over the library
+    // Hardcoded shapes (minus, etc.) stay geometric — no wobble.
+    // Library glyphs: prefer the exact label, then lowercase (dataset is lowercase).
     const hardcoded = HARDCODED_GLYPHS.get(char);
-    const variants = hardcoded ? null : library.byLabel.get(char);
+    const variants =
+      hardcoded ? null : library.byLabel.get(char) ?? library.byLabel.get(char.toLowerCase());
     let glyph: NormalizedGlyph;
     let isFallback = false;
+    let glyphScale = 1;
+    let rotationRad = 0;
+    let verticalOffset = 0;
 
     if (hardcoded) {
       glyph = hardcoded;
@@ -192,9 +190,14 @@ export function layoutText(
       glyph = makeFallbackGlyph(char);
       isFallback = true;
     } else {
+      glyphScale = 1 - SCALE_JITTER + rng() * SCALE_JITTER * 2;
+      rotationRad = (-ROTATION_JITTER_DEG + rng() * ROTATION_JITTER_DEG * 2) * DEG_TO_RAD;
+      verticalOffset = -VERTICAL_JITTER_PX + rng() * VERTICAL_JITTER_PX * 2;
       const idx = Math.floor(rng() * variants.length);
       glyph = variants[idx];
     }
+
+    const scaledHeight = fontHeight * glyphScale;
 
     const drawOpts: DrawGlyphOptions = {
       fontHeight,

@@ -21,6 +21,8 @@ interface Props {
   /** Called when the student requests a hint. Passes the ink phrase and target
    *  line so the board can animate a teacher-pen annotation. */
   onHint: (inkPhrase?: string, inkLine?: number) => void;
+  /** Third hint: erase the wrong line and write the corrected step in black. */
+  onShowFix: (line: number, fixLine: string) => void;
   onNewTrip: () => void;
   /** Button label on the trip summary ("New problem", "Next stop · 2 of 4"). */
   nextLabel?: string;
@@ -29,7 +31,7 @@ interface Props {
   children?: React.ReactNode;
 }
 
-export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, lastInkLine, onHint, onNewTrip, nextLabel, practiceCard, children }: Props) {
+export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, lastInkLine, onHint, onShowFix, onNewTrip, nextLabel, practiceCard, children }: Props) {
   const { result, errorLine, errorKey, phase, failure } = tutor;
   const [hintsShown, setHintsShown] = useState(0);
   const [showNext, setShowNext] = useState(false);
@@ -40,13 +42,18 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
   const reveal = () => {
     const next = Math.min(hintsShown + 1, result?.hints.length ?? 0);
     setHintsShown(next);
-    const hintText = result?.hints[next - 1];
-    // Use the server's short margin note, or fall back to the first four words
-    // of the hint text so the pen always has something to write.
-    const inkPhrase =
-      result?.hint_ink?.[next - 1] ||
-      (hintText ? hintText.split(" ").slice(0, 4).join(" ") : undefined);
-    onHint(inkPhrase, errorLine ?? undefined);
+    const hintIndex = next - 1;
+    const hintText = result?.hints[hintIndex];
+    if (hintIndex === 2 && errorLine != null) {
+      onShowFix(errorLine, result?.fix_line ?? "");
+    } else {
+      // Use the server's short margin note, or fall back to the first four words
+      // of the hint text so the pen always has something to write.
+      const inkPhrase =
+        result?.hint_ink?.[hintIndex] ||
+        (hintText ? hintText.split(" ").slice(0, 4).join(" ") : undefined);
+      onHint(inkPhrase, errorLine ?? undefined);
+    }
     if (voiceOn && hintText) speak(hintText);
   };
 

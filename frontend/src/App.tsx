@@ -2,7 +2,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { health } from "./api";
 import { Board, type TeacherInk, type Tool } from "./board/Board";
 import { LINES, lineOf, type Stroke } from "./board/geometry";
-// import { textToStrokes } from "./board/handwriting"; // superseded by vector glyph renderer
+import { textToStrokes } from "./board/handwriting"; // superseded by vector glyph renderer
 import { AskCard } from "./AskCard";
 import { DEMOS, runDemo } from "./demo";
 import { DestinationCard } from "./DestinationCard";
@@ -151,6 +151,15 @@ export default function App() {
     }
   };
 
+  const handleShowFix = (line: number, fixLine: string) => {
+    countHint();
+    setTeacherInk(null);
+    if (!fixLine.trim() || !glyphLibrary) return;
+    const next = textToStrokes(fixLine, line, glyphLibrary);
+    if (!next.length) return;
+    dispatch({ type: "replaceLine", line, strokes: next });
+  };
+
   // Like a GPS, surface the detail when something needs attention:
   // a wrong turn opens the drawer (hints live there), and so does arriving.
   const arrived = !!tutor.result?.arrived && tutor.phase === "ready";
@@ -174,11 +183,16 @@ export default function App() {
   // Dev helper: window.northstar.write(2, "2x - 6 + 4 = 10") writes a line in a handwriting font.
   const strokesRef = useRef(strokes);
   strokesRef.current = strokes;
+  const glyphLibraryRef = useRef(glyphLibrary);
+  glyphLibraryRef.current = glyphLibrary;
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     (window as unknown as { northstar: object }).northstar = {
       write: (line: number, text: string) => {
-        void line; void text; // textToStrokes removed — use the glyph renderer at #glyphs
+        const lib = glyphLibraryRef.current;
+        if (!lib) return;
+        const next = textToStrokes(text, line, lib);
+        if (next.length) dispatch({ type: "replaceLine", line, strokes: next });
       },
       erase: (line: number) =>
         dispatch({ type: "erase", ids: strokesRef.current.filter((s) => lineOf(s) === line).map((s) => s.id) }),
@@ -391,14 +405,7 @@ export default function App() {
             Route
           </button>
           <span className="divider" />
-          <label
-            className="btn"
-            title={glyphLibrary ? `Handwriting loaded (${glyphLibrary.byLabel.size} glyphs) — click to reload` : "Manually load handwriting dataset"}
-            style={{ cursor: "pointer", fontSize: 12, padding: "4px 10px" }}
-          >
-            {glyphLibrary ? `✍ ${glyphLibrary.byLabel.size}` : "✍ Load"}
-            <input type="file" accept=".json" onChange={handleGlyphFile} style={{ display: "none" }} />
-          </label>
+          
         </div>
       </header>
 
@@ -495,6 +502,7 @@ export default function App() {
             trip={trip}
             lastInkLine={lastUsed || null}
             onHint={handleHint}
+            onShowFix={handleShowFix}
             onNewTrip={advance}
             nextLabel={hasNextStop ? `Next stop · ${stopIndex + 2} of ${stops.length}` : "New problem"}
           >

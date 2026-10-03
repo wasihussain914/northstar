@@ -208,7 +208,7 @@ async def check(req: CheckRequest) -> dict:
     lines = merge(board, sym)
 
     first_error = next((l["line"] for l in lines if l["status"] == "error"), None)
-    hints, hint_ink, spoken = [], [], ""
+    hints, hint_ink, spoken, fix_line = [], [], "", ""
     if first_error is not None:
         # Hints are a second, text-only call, made only when there is a wrong
         # turn — the common no-error check pays for transcription alone.
@@ -218,11 +218,13 @@ async def check(req: CheckRequest) -> dict:
                 req.problem, lines, first_error, flagged["_detail"], flagged["detail"], req.lang)
             hints, spoken = explained["hints"], explained["spoken_nudge"]
             hint_ink = explained.get("hint_ink", [])
+            fix_line = explained.get("fix_line", "")
         except tutor.TutorError:
             hints = [f"Take another look at line {first_error}. Does it really follow from the line above?",
                      flagged["detail"] or "Compare it carefully with the previous line.", ""]
             spoken = f"Recalculating. Take another look at line {first_error}."
             hint_ink = ["compare with above", "check each term", ""]
+            fix_line = ""
 
     has_work = any(l["status"] not in ("skip", "pending") for l in lines)
     arrived = first_error is None and has_work and (
@@ -233,6 +235,7 @@ async def check(req: CheckRequest) -> dict:
         "first_error": first_error,
         "hints": [h for h in hints if h][:3],
         "hint_ink": [h for h in hint_ink if h][:3],
+        "fix_line": fix_line or "",
         "spoken_nudge": spoken,
         "next_step_hint": "" if first_error or arrived else board.get("next_step_hint", ""),
         "next_step_ink": "" if first_error or arrived else board.get("next_step_ink", ""),

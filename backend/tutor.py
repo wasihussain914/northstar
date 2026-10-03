@@ -238,9 +238,11 @@ EXPLAIN_SCHEMA: dict[str, Any] = {
         "hints": {"type": "array", "items": {"type": "string"}},
         "hint_ink": {"type": "array", "items": {"type": "string"},
                      "description": "Three ≤4-word margin notes matching each hint level"},
+        "fix_line": {"type": "string",
+                     "description": "The one corrected line the student should have written, plain text, no prose or LaTeX"},
         "spoken_nudge": {"type": "string"},
     },
-    "required": ["hints", "hint_ink", "spoken_nudge"],
+    "required": ["hints", "hint_ink", "fix_line", "spoken_nudge"],
     "additionalProperties": False,
 }
 
@@ -627,6 +629,9 @@ of that one line only. Never state the final answer or any solution values, in a
 Also write hint_ink: three very short margin notes (at most four words each), one per hint level, with matching \
 specificity: words a teacher would jot in red beside that line (e.g. "check the sign"), not a sentence. \
 No diagram, no arrows, no line numbers, and no final answer.
+Also write fix_line: the one line the student should have written instead, as plain text \
+(e.g. "2x - 6 + 4 = 10"). No prose, no LaTeX commands. No diagram. Never the final answer unless that one \
+line is itself the last step.
 Also write spoken_nudge: one short sentence (under 15 words) a GPS voice could say about the wrong turn, e.g. \
 "Recalculating. Take another look at the sign in line 3." Write it the way a calm human navigator would \
 actually say it out loud — contractions and natural rhythm, never a stiff script."""
