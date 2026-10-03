@@ -2,7 +2,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { health } from "./api";
 import { Board, type TeacherInk, type Tool } from "./board/Board";
 import { LINES, lineOf, type Stroke } from "./board/geometry";
-import { textToStrokes } from "./board/handwriting";
+// import { textToStrokes } from "./board/handwriting"; // superseded by vector glyph renderer
 import { AskCard } from "./AskCard";
 import { DEMOS, runDemo } from "./demo";
 import { DestinationCard } from "./DestinationCard";
@@ -14,6 +14,8 @@ import { TypeBar } from "./TypeBar";
 import { LANGUAGES, speechLocale, type Lang } from "./i18n";
 import { useTrip } from "./useTrip";
 import { useTutor } from "./useTutor";
+import { loadDataset } from "./glyphs/lib/loadDataset";
+import type { GlyphLibrary } from "./glyphs/types/handwriting";
 import { setServerTts, setSpeechLang, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
 
 const PRESETS = [
@@ -96,6 +98,29 @@ export default function App() {
   // The route drawer slides over the paper; wide desktops dock it (CSS).
   const [panelOpen, setPanelOpen] = useState(false);
 
+  const [glyphLibrary, setGlyphLibrary] = useState<GlyphLibrary | null>(null);
+
+  // Auto-load the handwriting dataset from the backend on startup
+  useEffect(() => {
+    fetch("/api/samples")
+      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+      .then((json) => setGlyphLibrary(loadDataset(json)))
+      .catch(() => { /* backend not running yet or no samples — silent */ });
+  }, []);
+
+  const handleGlyphFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const json = JSON.parse(ev.target?.result as string);
+        setGlyphLibrary(loadDataset(json));
+      } catch { /* ignore bad files */ }
+    };
+    reader.readAsText(file);
+  };
+
   const tutor = useTutor(strokes, problem, voiceOn, lang);
   const { trip, countHint } = useTrip(strokes, tutor);
 
@@ -152,7 +177,9 @@ export default function App() {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     (window as unknown as { northstar: object }).northstar = {
-      write: (line: number, text: string) => dispatch({ type: "addMany", strokes: textToStrokes(text, line) }),
+      write: (line: number, text: string) => {
+        void line; void text; // textToStrokes removed — use the glyph renderer at #glyphs
+      },
       erase: (line: number) =>
         dispatch({ type: "erase", ids: strokesRef.current.filter((s) => lineOf(s) === line).map((s) => s.id) }),
       clear: () => dispatch({ type: "clear" }),
@@ -249,11 +276,12 @@ export default function App() {
   const usedLines = new Set(strokes.map(lineOf));
   const lastUsed = usedLines.size ? Math.max(...usedLines) : 0;
   const typeTarget = selectedLine ?? (lastUsed < LINES ? lastUsed + 1 : null);
-  const typeStep = (text: string) => {
+  const typeStep = (_text: string) => {
     if (typeTarget == null) return;
     unlockSpeech();
     stopDemo();
-    dispatch({ type: "replaceLine", line: typeTarget, strokes: textToStrokes(text, typeTarget) });
+    // textToStrokes removed — typed steps no longer rasterise a font
+    // dispatch({ type: "replaceLine", line: typeTarget, strokes: textToStrokes(text, typeTarget) });
     setSelectedLine(null);
   };
 
@@ -362,6 +390,15 @@ export default function App() {
             <span className={`route-dot tone-${pillTone(tutor, arrived)}`} />
             Route
           </button>
+          <span className="divider" />
+          <label
+            className="btn"
+            title={glyphLibrary ? `Handwriting loaded (${glyphLibrary.byLabel.size} glyphs) — click to reload` : "Manually load handwriting dataset"}
+            style={{ cursor: "pointer", fontSize: 12, padding: "4px 10px" }}
+          >
+            {glyphLibrary ? `✍ ${glyphLibrary.byLabel.size}` : "✍ Load"}
+            <input type="file" accept=".json" onChange={handleGlyphFile} style={{ display: "none" }} />
+          </label>
         </div>
       </header>
 
@@ -427,6 +464,7 @@ export default function App() {
               errorLine={tutor.errorLine}
               selectedLine={selectedLine}
               teacherInk={teacherInk}
+              glyphLibrary={glyphLibrary}
               onAdd={(stroke) => dispatch({ type: "add", stroke })}
               onErase={(ids) => dispatch({ type: "erase", ids })}
               onSelectLine={onSelectLine}

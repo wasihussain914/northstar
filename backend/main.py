@@ -342,6 +342,17 @@ async def ask(req: AskRequest) -> dict:
         raise HTTPException(502, str(exc))
 
 
+_SAMPLES_PATH = Path(__file__).with_name("data") / "samples.json"
+
+
+@app.get("/api/samples")
+async def get_samples():
+    """Return the handwriting glyph dataset as JSON."""
+    from fastapi.responses import FileResponse
+    if not _SAMPLES_PATH.exists():
+        raise HTTPException(404, "samples.json not found")
+    return FileResponse(_SAMPLES_PATH, media_type="application/json")
+
 # Serve the built frontend (frontend/dist) when it exists, so one process can
 # host the whole app for deploys. API routes above take precedence.
 _DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"

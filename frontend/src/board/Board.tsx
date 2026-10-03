@@ -6,6 +6,7 @@ import {
   LINES,
   MIN_BOARD_W,
   hitStrokes,
+  lineOf,
   makeStroke,
   outlinePath,
   strokePath,
@@ -13,8 +14,11 @@ import {
   type Stroke,
 } from "./geometry";
 import { questionStrokes } from "./handwriting";
-import { buildTeacherAnim, drawTeacherAnim, type TeacherAnim } from "./teacherPen";
 import { createInkContacts, notePointerDown, notePointerMove, notePointerUp } from "./palm";
+import { layoutText, type GlyphLayout } from "../glyphs/lib/renderText";
+import { drawGlyph, drawGlyphPartialStroke } from "../glyphs/lib/renderGlyph";
+import type { GlyphLibrary } from "../glyphs/types/handwriting";
+// animation constants only used by the standalone renderer, not teacher pen
 
 export type Tool = "pen" | "eraser";
 
@@ -39,8 +43,10 @@ interface Props {
   markers: Map<number, Marker>;
   errorLine: number | null;
   selectedLine: number | null;
-  /** When set, animates red teacher handwriting beside that line. */
+  /** When set, animates red teacher handwriting beside that line using personal glyphs. */
   teacherInk: TeacherInk | null;
+  /** Personal glyph dataset — drives the teacher-pen renderer. */
+  glyphLibrary: GlyphLibrary | null;
   onAdd: (s: Stroke) => void;
   onErase: (ids: number[]) => void;
   onSelectLine: (line: number) => void;
@@ -48,10 +54,21 @@ interface Props {
 }
 
 const ERASER_R = 14;
-/** Duration of the teacher-pen reveal animation in milliseconds. */
-const TEACHER_ANIM_MS = 1100;
+const TEACHER_FONT_HEIGHT = 20;          // smaller so it doesn't crowd the student's work
+const TEACHER_FONT_HEIGHT_ABOVE = 16;    // even smaller when placed above the line
+const TEACHER_COLOR = "#c62828";
+const TEACHER_STROKE_WIDTH = 1.4;
 
-export function Board({ strokes, problem, promptStart, tool, markers, errorLine, selectedLine, teacherInk, onAdd, onErase, onSelectLine, onInteract }: Props) {
+/** Stored layout + progress for the animated teacher annotation. */
+type TeacherState = {
+  glyphs: GlyphLayout[];
+  gi: number;            // current glyph index
+  si: number;            // current stroke index within glyph
+  pi: number;            // points revealed in current stroke
+  pointsPerFrame: number; // advances fast enough to finish in ~1 second
+};
+
+export function Board({ strokes, problem, promptStart, tool, markers, errorLine, selectedLine, teacherInk, glyphLibrary, onAdd, onErase, onSelectLine, onInteract }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(800);
@@ -65,9 +82,8 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
   const eraserPos = useRef<[number, number] | null>(null);
   const frame = useRef(0);
 
-  // Teacher ink animation state (refs so they don't re-trigger draw useCallback)
-  const teacherAnimRef = useRef<TeacherAnim | null>(null);
-  const teacherRevealRef = useRef(0);
+  // Teacher ink animation state (glyph renderer)
+  const teacherStateRef = useRef<TeacherState | null>(null);
   const teacherRafRef = useRef(0);
 
   useEffect(() => {
@@ -175,10 +191,34 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
       ctx.fill(outlinePath(live.current.points, live.current.pen, false));
     }
 
-    // Red teacher annotation (drawn after student ink, excluded from snapshots)
-    const tAnim = teacherAnimRef.current;
-    if (tAnim && teacherRevealRef.current > 0) {
-      drawTeacherAnim(ctx, tAnim, teacherRevealRef.current);
+    // Red teacher annotation — rendered via personal glyph library
+    const ts = teacherStateRef.current;
+    if (ts && ts.glyphs.length > 0) {
+      // Draw all fully-completed glyphs
+      for (let g = 0; g < ts.gi && g < ts.glyphs.length; g++) {
+        const layout = ts.glyphs[g];
+        if (layout.type === "space" || !layout.glyph) continue;
+        drawGlyph(ctx, layout.glyph, layout.placeX, layout.baseline, {
+          ...layout.drawOpts,
+          strokeStyle: TEACHER_COLOR,
+        });
+      }
+      // Draw the in-progress glyph partially
+      if (ts.gi < ts.glyphs.length) {
+        const layout = ts.glyphs[ts.gi];
+        if (layout.glyph && layout.type === "glyph") {
+          // All strokes before the current one, fully drawn
+          for (let s = 0; s < ts.si; s++) {
+            drawGlyphPartialStroke(ctx, layout.glyph, layout.placeX, layout.baseline,
+              { ...layout.drawOpts, strokeStyle: TEACHER_COLOR },
+              s, layout.glyph.strokes[s]?.length ?? 0);
+          }
+          // Current stroke, partially drawn
+          drawGlyphPartialStroke(ctx, layout.glyph, layout.placeX, layout.baseline,
+            { ...layout.drawOpts, strokeStyle: TEACHER_COLOR },
+            ts.si, ts.pi);
+        }
+      }
     }
 
     if (eraserPos.current) {
@@ -205,46 +245,111 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
     draw();
   }, [draw]);
 
-  // Animate teacher ink whenever the hint changes.
-  // We intentionally capture `strokes` and `boardW` at the moment teacherInk
-  // is set (i.e. when the student clicked "Give me a hint"), so the note is
-  // placed relative to the ink that was on screen at that instant.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Animate teacher ink using personal glyph renderer whenever the hint changes.
   useEffect(() => {
     cancelAnimationFrame(teacherRafRef.current);
-    if (!teacherInk) {
-      teacherAnimRef.current = null;
-      teacherRevealRef.current = 0;
-      requestDraw();
-      return;
+    teacherStateRef.current = null;
+    requestDraw();
+
+    if (!teacherInk || !glyphLibrary) return;
+
+    // Lowercase the phrase — only lowercase glyphs are in the dataset
+    const phrase = teacherInk.phrase.toLowerCase();
+    const seed = teacherInk.line * 997 + (phrase.charCodeAt(0) || 0);
+
+    // Find the rightmost x of student ink on the target line
+    const lineStrokes = strokes.filter((s) => lineOf(s) === teacherInk.line);
+    const rightEdge = lineStrokes.length > 0
+      ? Math.max(...lineStrokes.map((s) => s.box.maxX))
+      : 28;
+
+    const GAP = 14;
+
+    // --- Beside attempt ---
+    const baseFontH = TEACHER_FONT_HEIGHT;
+    const baseline = (teacherInk.line - 1) * LINE_H + LINE_H * 0.72;
+    let startX = rightEdge + GAP;
+    let usedFontH = baseFontH;
+    let usedBaseline = baseline;
+
+    let result = layoutText(phrase, glyphLibrary, startX, baseline, {
+      fontHeight: baseFontH,
+      inkClearance: 1,
+      strokeWidthPx: TEACHER_STROKE_WIDTH,
+      seed,
+    });
+
+    // --- If overflow, go above the line with a smaller font ---
+    if (startX + result.totalWidth > boardW - 8) {
+      startX = 28;
+      usedFontH = TEACHER_FONT_HEIGHT_ABOVE;
+      usedBaseline = (teacherInk.line - 1) * LINE_H + usedFontH + 2;
+      result = layoutText(phrase, glyphLibrary, startX, usedBaseline, {
+        fontHeight: usedFontH,
+        inkClearance: 1,
+        strokeWidthPx: Math.max(0.8, TEACHER_STROKE_WIDTH * (usedFontH / baseFontH)),
+        seed,
+      });
     }
 
-    const anim = buildTeacherAnim(teacherInk.phrase, teacherInk.line, strokes, boardW);
-    teacherAnimRef.current = anim;
-    teacherRevealRef.current = 0;
+    if (result.glyphs.length === 0) return;
 
-    if (!anim || anim.totalPoints === 0) {
-      requestDraw();
-      return;
+    // Pre-count total points so we can target exactly ~60 frames (≈1 second)
+    let totalPoints = 0;
+    for (const layout of result.glyphs) {
+      if (layout.type !== "glyph" || !layout.glyph) continue;
+      for (const stroke of layout.glyph.strokes) totalPoints += stroke.length;
     }
+    const TARGET_FRAMES = 60; // ~1 second at 60 fps
+    const pointsPerFrame = Math.max(1, Math.ceil(totalPoints / TARGET_FRAMES));
 
-    const startTime = performance.now();
-    const tick = () => {
-      const elapsed = performance.now() - startTime;
-      const r = Math.min(
-        Math.round((elapsed / TEACHER_ANIM_MS) * anim.totalPoints),
-        anim.totalPoints,
-      );
-      teacherRevealRef.current = r;
+    teacherStateRef.current = { glyphs: result.glyphs, gi: 0, si: 0, pi: pointsPerFrame, pointsPerFrame };
+    requestDraw();
+
+    let lastFrameTime = 0;
+    function tick(now: number) {
+      const ts = teacherStateRef.current;
+      if (!ts) return;
+      if (now - lastFrameTime < 14) { teacherRafRef.current = requestAnimationFrame(tick); return; }
+      lastFrameTime = now;
+
+      // Advance by pointsPerFrame through the glyph list (no inter-stroke pauses)
+      let toAdvance = ts.pointsPerFrame;
+      while (toAdvance > 0 && ts.gi < ts.glyphs.length) {
+        const layout = ts.glyphs[ts.gi];
+        if (layout.type === "space" || !layout.glyph || layout.type === "fallback") {
+          ts.gi++; ts.si = 0; ts.pi = ts.pointsPerFrame;
+          continue;
+        }
+        const stroke = layout.glyph.strokes[ts.si];
+        if (!stroke) {
+          ts.gi++; ts.si = 0; ts.pi = ts.pointsPerFrame;
+          continue;
+        }
+        const remaining = stroke.length - ts.pi;
+        if (toAdvance >= remaining) {
+          toAdvance -= remaining;
+          ts.si++;
+          ts.pi = ts.pointsPerFrame;
+          if (ts.si >= layout.glyph.strokes.length) {
+            ts.gi++; ts.si = 0;
+          }
+        } else {
+          ts.pi += toAdvance;
+          toAdvance = 0;
+        }
+      }
+
       requestDraw();
-      if (r < anim.totalPoints) {
+      if (ts.gi < ts.glyphs.length) {
         teacherRafRef.current = requestAnimationFrame(tick);
       }
-    };
-    teacherRafRef.current = requestAnimationFrame(tick);
+    }
 
+    teacherRafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(teacherRafRef.current);
-  }, [teacherInk]); // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teacherInk, glyphLibrary]);
 
   const toPoint = (e: PointerEvent | React.PointerEvent, rect: DOMRect): Point => [
     (e.clientX - rect.left) / scale,
