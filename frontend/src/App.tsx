@@ -6,6 +6,7 @@ import { textToStrokes } from "./board/handwriting";
 import { AskCard } from "./AskCard";
 import { DEMOS, runDemo } from "./demo";
 import { DestinationCard } from "./DestinationCard";
+import { RecalcBanner, Starburst } from "./Flashes";
 import { ProblemScanner, type ScannedProblem } from "./ProblemScanner";
 import { RoutePanel } from "./RoutePanel";
 import { TypeBar } from "./TypeBar";
@@ -16,6 +17,7 @@ import { setSpeechLang, speechSupported, stopSpeaking, unlockSpeech } from "./vo
 
 const PRESETS = [
   "Solve 2(x − 3) + 4 = 10",
+  "Differentiate x³ − 3x² + 2x",
   "Solve 3(x + 2) − 5 = 2x + 9",
   "Solve −2x + 4 > 10",
   "Solve x/3 + 1 = 5",
@@ -351,6 +353,8 @@ export default function App() {
           />
           <div className="board-stage">
             <StatusPill tutor={tutor} arrived={arrived} onTap={() => setPanelOpen(true)} />
+            <RecalcBanner errorKey={tutor.errorKey} line={tutor.errorLine} />
+            <Starburst fireKey={arrived ? problem : ""} />
             <div className="float-tools" role="toolbar" aria-label="Board tools">
               <ToolButton active={tool === "pen"} onClick={() => setTool("pen")} label="Pen (P)">
                 <path d="M4 16l1-4 8.5-8.5a2.1 2.1 0 013 3L8 15l-4 1z" />
