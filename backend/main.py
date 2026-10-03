@@ -160,7 +160,8 @@ def decode_png(data: str) -> tuple[str, bytes]:
 async def health() -> dict:
     return {"ok": True, "has_key": FAKE_VISION or tutor.has_api_key(),
             "model": fake_tutor.MODEL if FAKE_VISION else tutor.active_model(),
-            "provider": "fake" if FAKE_VISION else ("gemini" if tutor.using_gemini() else "claude"),
+            "provider": "fake" if FAKE_VISION else (
+                "grok" if tutor.using_grok() else "gemini" if tutor.using_gemini() else "claude"),
             "tts": tts.enabled(),
             "fake": FAKE_VISION}
 

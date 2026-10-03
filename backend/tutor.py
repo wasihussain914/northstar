@@ -2,7 +2,9 @@
 
 Claude is the default. Gemini (Google AI / Gemini Developer API) is used when
 NORTHSTAR_PROVIDER=gemini, when NORTHSTAR_MODEL names a Gemini model, or when
-only a Google AI key is set. Both clients stay in this module.
+only a Google AI key is set. Grok (xAI) works the same way: NORTHSTAR_PROVIDER=grok,
+a NORTHSTAR_MODEL starting with "grok", or only an XAI_API_KEY set. All clients
+stay in this module.
 
 Two calls:
   read_board()    - vision: transcribe every numbered line and judge it. Kept
@@ -13,9 +15,12 @@ Two calls:
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import os
+import urllib.error
+import urllib.request
 from typing import Any
 
 import anthropic
@@ -29,6 +34,8 @@ MODEL = os.environ.get("NORTHSTAR_MODEL", "claude-sonnet-5-5")
 # Flash is the live-feedback counterpart to Sonnet: vision plus structured JSON,
 # without a long thinking pass.
 GEMINI_MODEL = "gemini-3.8-flash"
+# Grok 4 is xAI's multimodal flagship: vision plus strict structured JSON.
+XAI_MODEL = "grok-4"
 
 _client: anthropic.AsyncAnthropic | None = None
 _gemini: genai.Client | None = None
@@ -46,20 +53,47 @@ def google_api_key() -> str:
     return (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
 
 
+def xai_api_key() -> str:
+    return (os.environ.get("XAI_API_KEY") or os.environ.get("GROK_API_KEY") or "").strip()
+
+
+def using_grok() -> bool:
+    """Grok when explicitly selected, or when only an xAI key is set."""
+    explicit = os.environ.get("NORTHSTAR_PROVIDER", "").strip().lower()
+    if explicit in {"grok", "xai"}:
+        return True
+    if explicit:
+        return False
+    named = os.environ.get("NORTHSTAR_MODEL", "").strip().lower()
+    if named.startswith("grok"):
+        return True
+    return bool(xai_api_key()) and not os.environ.get("ANTHROPIC_API_KEY") and not google_api_key()
+
+
 def using_gemini() -> bool:
     """Claude unless the environment explicitly selects Gemini, or only a Google key is set."""
     explicit = os.environ.get("NORTHSTAR_PROVIDER", "").strip().lower()
     if explicit in {"gemini", "google"}:
         return True
-    if explicit in {"claude", "anthropic"}:
+    if explicit in {"claude", "anthropic", "grok", "xai"}:
         return False
     named = os.environ.get("NORTHSTAR_MODEL", "").strip().lower()
     if named.startswith("gemini"):
         return True
+    if named.startswith("grok"):
+        return False
     return bool(google_api_key()) and not os.environ.get("ANTHROPIC_API_KEY")
 
 
 def active_model() -> str:
+    if using_grok():
+        explicit = os.environ.get("NORTHSTAR_XAI_MODEL", "").strip()
+        if explicit:
+            return explicit
+        named = os.environ.get("NORTHSTAR_MODEL", "").strip()
+        if named.startswith("grok"):
+            return named
+        return XAI_MODEL
     if using_gemini():
         explicit = os.environ.get("NORTHSTAR_GEMINI_MODEL", "").strip()
         if explicit:
@@ -69,12 +103,14 @@ def active_model() -> str:
             return named
         return GEMINI_MODEL
     named = os.environ.get("NORTHSTAR_MODEL", "").strip()
-    if not named or named.startswith("gemini"):
+    if not named or named.startswith("gemini") or named.startswith("grok"):
         return "claude-sonnet-5-5"
     return named
 
 
 def has_api_key() -> bool:
+    if using_grok():
+        return bool(xai_api_key())
     if using_gemini():
         return bool(google_api_key())
     return bool(os.environ.get("ANTHROPIC_API_KEY"))
@@ -344,7 +380,78 @@ async def _structured_gemini(content: list[dict] | str, schema: dict, max_tokens
     return data
 
 
+# --- Grok (xAI): OpenAI-compatible chat completions over stdlib HTTP ---
+
+def _grok_messages(content: list[dict] | str) -> list[dict]:
+    if isinstance(content, str):
+        user: Any = content
+    else:
+        parts: list[dict] = []
+        for block in content:
+            if block.get("type") == "image":
+                source = block["source"]
+                parts.append({"type": "image_url", "image_url": {
+                    "url": f"data:{source.get('media_type', 'image/png')};base64,{source['data']}",
+                    "detail": "high"}})
+            elif block.get("type") == "text":
+                parts.append({"type": "text", "text": block["text"]})
+        user = parts
+    return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
+
+
+def _xai_request(payload: dict) -> dict:
+    req = urllib.request.Request(
+        "https://api.x.ai/v1/chat/completions",
+        data=json.dumps(payload).encode(),
+        headers={"authorization": f"Bearer {xai_api_key()}", "content-type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=90) as response:
+        return json.loads(response.read())
+
+
+async def _grok_chat(content: list[dict] | str, schema: dict | None, max_tokens: int) -> str:
+    if not xai_api_key():
+        raise TutorError("No xAI API key found. Add XAI_API_KEY to backend/.env and restart the server.")
+    payload: dict[str, Any] = {"model": active_model(), "messages": _grok_messages(content),
+                               "max_tokens": max_tokens, "temperature": 0.2}
+    if schema is not None:
+        payload["response_format"] = {"type": "json_schema",
+                                      "json_schema": {"name": "northstar", "strict": True, "schema": schema}}
+    try:
+        out = await asyncio.to_thread(_xai_request, payload)
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode(errors="replace")[:300]
+        if exc.code in (401, 403):
+            raise TutorError("The xAI API key is missing or invalid.") from exc
+        if exc.code == 429:
+            raise TutorError("Rate limited by the xAI API; try again in a moment.") from exc
+        raise TutorError(f"xAI API error ({exc.code}): {body}") from exc
+    except urllib.error.URLError as exc:
+        raise TutorError("Couldn't reach the xAI API. Check your connection.") from exc
+    try:
+        text = out["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise TutorError("Grok returned an empty reply.") from exc
+    if not text:
+        raise TutorError("Grok returned an empty reply.")
+    return text
+
+
+async def _structured_grok(content: list[dict] | str, schema: dict, max_tokens: int) -> dict:
+    text = await _grok_chat(content, schema, max_tokens)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise TutorError("Grok returned malformed JSON.") from exc
+    if not isinstance(data, dict):
+        raise TutorError("Grok returned malformed JSON.")
+    return data
+
+
 async def _structured(content: list[dict] | str, schema: dict, max_tokens: int = 8000) -> dict:
+    if using_grok():
+        return await _structured_grok(content, schema, max_tokens)
     if using_gemini():
         return await _structured_gemini(content, schema, max_tokens)
     try:
@@ -480,6 +587,8 @@ async def ask(problem: str, question: str, image_png_b64: str | None, transcript
         f"{ASK_INSTRUCTIONS}{lang_note(lang)}\n\nProblem: {problem or '(not given)'}\n"
         f"What the last check found:\n{context or '(no check yet)'}\n\n"
         f"Student's question: {question}")})
+    if using_grok():
+        return {"answer": (await _grok_chat(content, None, 4000)).strip()}
     if using_gemini():
         response = await _gemini_generate(content, None, 4000)
         answer = _gemini_text(
