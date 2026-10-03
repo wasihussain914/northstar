@@ -1796,10 +1796,10 @@ canvas.ink.tool-eraser {
 
 .pip {
   position: absolute;
-  right: 14px;
+  right: 78px; /* just left of the floating board tools */
   bottom: 12px;
   z-index: 7;
-  width: 96px;
+  width: 128px;
   user-select: none;
   -webkit-user-select: none;
   pointer-events: none; /* only the figure and buttons take taps, never the paper around them */
@@ -2111,9 +2111,16 @@ canvas.ink.tool-eraser {
   color: #f5c451;
 }
 
+@media (max-width: 900px) {
+  .pip {
+    width: 104px;
+  }
+}
+
 @media (max-width: 560px) {
   .pip {
-    width: 70px;
+    width: 72px;
+    right: 14px;
   }
 }
 
