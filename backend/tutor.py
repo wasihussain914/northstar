@@ -574,7 +574,8 @@ async def practice_problem(problem: str, wrong_latex: str, note: str, lang: str 
 ASK_INSTRUCTIONS = """The student just asked you a question out loud while working. Answer it as North Star: \
 in at most three short sentences, warm and concrete, guiding rather than solving. Never state the final answer, \
 even if asked directly; offer the next nudge instead. Your answer will be read aloud by a speech synthesizer, so \
-write math in words a person would say ("two x minus six equals ten"), with no LaTeX, symbols or markdown."""
+write math in words a person would say ("two x minus six equals ten"), with no LaTeX, symbols or markdown. \
+Speak like a person: contractions, natural rhythm, warm and brief."""
 
 
 async def ask(problem: str, question: str, image_png_b64: str | None, transcript: dict[int, str] | None,
@@ -627,7 +628,8 @@ Also write hint_ink: three very short margin notes (at most four words each), on
 specificity: words a teacher would jot in red beside that line (e.g. "check the sign"), not a sentence. \
 No diagram, no arrows, no line numbers, and no final answer.
 Also write spoken_nudge: one short sentence (under 15 words) a GPS voice could say about the wrong turn, e.g. \
-"Recalculating. Take another look at the sign in line 3.\""""
+"Recalculating. Take another look at the sign in line 3." Write it the way a calm human navigator would \
+actually say it out loud — contractions and natural rhythm, never a stiff script."""
 
 
 async def explain_line(problem: str, lines: list[dict], line: int, detail: str, note: str = "",

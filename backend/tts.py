@@ -64,7 +64,7 @@ def _post(url: str, payload: dict, headers: dict) -> bytes:
 
 def _fetch_grok(text: str, lang: str) -> bytes:
     return _post("https://api.x.ai/v1/tts",
-                 {"text": text, "voice_id": GROK_VOICE, "language": lang or "auto", "speed": 1.05},
+                 {"text": text, "voice_id": GROK_VOICE, "language": lang or "auto", "speed": 1.0},
                  {"authorization": f"Bearer {xai_key()}"})
 
 
