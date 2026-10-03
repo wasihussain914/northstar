@@ -84,8 +84,9 @@ export function Mascot({ mood, voiceOn, besideDrawer = false }: {
   const rig = useRef<Rig>({ nod: null, arm: null, mouth: null, teeth: null, tongue: null });
   const utterance = useRef<Utterance>({ text: "", cps: 14.5, starts: [], startedAt: 0, started: false, pos: 0 });
   const talkingNow = useRef(false);
-  const moodNow = useRef(mood);
-  moodNow.current = mood;
+  const shownMood = useMoodDwell(mood);
+  const moodNow = useRef(shownMood);
+  moodNow.current = shownMood;
 
   // Caption whatever the GPS voice says, and follow along as it's spoken.
   useEffect(() => {
@@ -130,6 +131,9 @@ export function Mascot({ mood, voiceOn, besideDrawer = false }: {
   // and the mood sway fades its amplitude instead of switching on and off.
   useEffect(() => {
     if (hidden) return;
+    // Speech may have ended while Pip was hidden (and the loop wasn't running
+    // to finish closing his mouth): start clean, or "talking" would stick.
+    if (!talkingNow.current) setClosing(false);
     const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     let frame = 0;
     let last = performance.now();
@@ -312,7 +316,7 @@ export function Mascot({ mood, voiceOn, besideDrawer = false }: {
   }
 
   return (
-    <div className={`pip mood-${mood}${talking || closing ? " talking" : ""}${besideDrawer ? " beside-drawer" : ""}`}>
+    <div className={`pip mood-${shownMood}${talking || closing ? " talking" : ""}${besideDrawer ? " beside-drawer" : ""}`}>
       <div className={`pip-bubble${bubble ? " show" : ""}`} aria-live="polite">
         {talking ? <Karaoke text={bubble} saidWord={saidWord} /> : bubble}
       </div>
@@ -329,6 +333,53 @@ export function Mascot({ mood, voiceOn, besideDrawer = false }: {
       </button>
     </div>
   );
+}
+
+/** Keep each expression on screen long enough to read before the next one. */
+const MOOD_DWELL_MS = 550;
+
+/**
+ * The mood Pip shows. Each expression stays up at least MOOD_DWELL_MS, and a
+ * brief one (a check that finished instantly) still gets its moment, so he
+ * visibly thinks before he reacts. At most one mood waits behind the current
+ * one, so he never falls behind the board.
+ */
+function useMoodDwell(mood: PipMood): PipMood {
+  const [shown, setShown] = useState(mood);
+  const queue = useRef<PipMood[]>([]);
+  const since = useRef(performance.now());
+  const timer = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    const q = queue.current;
+    if (mood === shown) {
+      // Back where we are before anything queued got shown: drop it.
+      q.length = 0;
+      window.clearTimeout(timer.current);
+      timer.current = undefined;
+      return;
+    }
+    const tail = q.length ? q[q.length - 1] : shown;
+    if (mood === tail) return;
+    q.push(mood);
+    if (q.length > 2) q.splice(0, q.length - 2);
+
+    const advance = () => {
+      timer.current = undefined;
+      const next = queue.current.shift();
+      if (next === undefined) return;
+      since.current = performance.now();
+      setShown(next);
+      if (queue.current.length) timer.current = window.setTimeout(advance, MOOD_DWELL_MS);
+    };
+    if (timer.current === undefined) {
+      const wait = Math.max(0, MOOD_DWELL_MS - (performance.now() - since.current));
+      timer.current = window.setTimeout(advance, wait);
+    }
+  }, [mood, shown]);
+
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  return shown;
 }
 
 /** The caption, lighting up each word as it's spoken. */
