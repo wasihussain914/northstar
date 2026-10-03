@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { GRIN, charWeight, mouthGeometry, visemeAt, wordStarts } from "./lipsync";
+import { GRIN, GRIN_OPEN, GRIN_WIDTH, charWeight, mouthGeometry, visemeAt, wordStarts } from "./lipsync";
 import { audioLevel, caption, onSpeech, onSpeechSync, speak } from "./voice";
 
 /**
@@ -9,7 +9,7 @@ import { audioLevel, caption, onSpeech, onSpeechSync, speak } from "./voice";
  * to the route, and hops when poked.
  */
 
-export type PipMood = "idle" | "thinking" | "happy" | "worried" | "party" | "dizzy";
+export type PipMood = "idle" | "watching" | "thinking" | "happy" | "worried" | "party" | "dizzy";
 
 const QUIPS = [
   "I'd say turn left, but this is algebra.",
@@ -72,21 +72,31 @@ export function Mascot({ mood, voiceOn, besideDrawer = false }: {
   besideDrawer?: boolean;
 }) {
   const [talking, setTalking] = useState(false);
+  // Still easing the mouth shut after the voice stopped.
+  const [closing, setClosing] = useState(false);
   const [bubble, setBubble] = useState("");
   // Index of the last word spoken, for the karaoke caption (-1: none yet).
   const [saidWord, setSaidWord] = useState(-1);
-  const [hop, setHop] = useState(0);
   const [hidden, setHidden] = useState(readHidden);
   const hideTimer = useRef<number | undefined>(undefined);
   const lastQuip = useRef(-1);
+  const figure = useRef<HTMLButtonElement>(null);
   const rig = useRef<Rig>({ nod: null, arm: null, mouth: null, teeth: null, tongue: null });
   const utterance = useRef<Utterance>({ text: "", cps: 14.5, starts: [], startedAt: 0, started: false, pos: 0 });
+  const talkingNow = useRef(false);
+  const moodNow = useRef(mood);
+  moodNow.current = mood;
 
   // Caption whatever the GPS voice says, and follow along as it's spoken.
   useEffect(() => {
     const offSpeech = onSpeech((s) => {
       window.clearTimeout(hideTimer.current);
-      setTalking(s.speaking && !s.silent);
+      const audible = s.speaking && !s.silent;
+      // Hand over to "closing" in the same render, so the mouth never blinks out
+      // for a frame between the voice stopping and the loop easing it shut.
+      if (talkingNow.current && !audible) setClosing(true);
+      talkingNow.current = audible;
+      setTalking(audible);
       if (s.speaking) {
         const u = utterance.current;
         if (s.text !== u.text || !u.text) {
@@ -115,87 +125,169 @@ export function Mascot({ mood, voiceOn, besideDrawer = false }: {
     };
   }, []);
 
-  // While talking: shape the mouth to the letter being said, nod along, gesture.
+  // One continuous animation loop, so nothing ever snaps: the mouth runs on
+  // springs and blends each sound into the next, talking eases in and out,
+  // and the mood sway fades its amplitude instead of switching on and off.
   useEffect(() => {
-    if (!talking) return;
+    if (hidden) return;
     const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     let frame = 0;
     let last = performance.now();
     let open = 0;
+    let openV = 0;
     let width = 1;
+    let widthV = 0;
+    let env = 0; // 0 = not talking, 1 = fully talking
+    let swayAmp = 0;
+    let swayPhase = 0;
     let charIdx = -1;
     let jitter = 1;
+    let jitterSmooth = 1;
     let word = -1;
+    let drawing = false;
+    const attrs = new Map<Element, Record<string, string>>();
 
-    const tick = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-      const u = utterance.current;
-      // Engines that never report starting (and silenced tests) still animate.
-      if (!u.started && now - u.startedAt > 450) u.started = true;
+    // Only touch the DOM when a value actually changes.
+    const set = (el: Element | null, name: string, value: string) => {
+      if (!el) return;
+      let a = attrs.get(el);
+      if (!a) attrs.set(el, (a = {}));
+      if (a[name] === value) return;
+      a[name] = value;
+      el.setAttribute(name, value);
+    };
+    const clear = (el: Element | null, name: string) => {
+      if (!el) return;
+      attrs.get(el) && delete attrs.get(el)![name];
+      el.removeAttribute(name);
+    };
+    const drawMouth = (o: number, w: number) => {
+      const g = mouthGeometry(o, w);
+      const r = rig.current;
+      set(r.mouth, "d", g.d);
+      set(r.teeth, "d", g.teeth);
+      set(r.teeth, "opacity", g.showTeeth ? "1" : "0");
+      set(r.tongue, "cy", g.tongue.cy.toFixed(2));
+      set(r.tongue, "rx", g.tongue.rx.toFixed(2));
+      set(r.tongue, "ry", g.tongue.ry.toFixed(2));
+      set(r.tongue, "opacity", g.tongue.visible ? "1" : "0");
+    };
+
+    const step = (dt: number, now: number) => {
+      const talkingNowValue = talkingNow.current;
+      env += ((talkingNowValue ? 1 : 0) - env) * (1 - Math.exp(-dt / 0.12));
 
       let targetOpen = 0;
       let targetWidth = 1;
-      if (u.started) {
-        u.pos = Math.min(u.text.length, u.pos + (dt * u.cps) / charWeight(u.text[Math.floor(u.pos)]));
-        const i = Math.floor(u.pos);
-        if (i !== charIdx) {
-          charIdx = i;
-          jitter = 0.82 + Math.random() * 0.32; // no two syllables quite alike
-        }
-        const v = visemeAt(u.text, u.pos);
-        targetOpen = v.open * jitter;
-        targetWidth = v.width;
-        const level = audioLevel();
-        if (level !== null) targetOpen *= Math.min(1.25, 0.2 + level * 1.6);
+      const u = utterance.current;
+      if (talkingNowValue) {
+        // Engines that never report starting (and silenced tests) still animate.
+        if (!u.started && now - u.startedAt > 450) u.started = true;
+        if (u.started) {
+          u.pos = Math.min(u.text.length, u.pos + (dt * u.cps) / charWeight(u.text[Math.floor(u.pos)]));
+          const i = Math.floor(u.pos);
+          if (i !== charIdx) {
+            charIdx = i;
+            jitter = 0.84 + Math.random() * 0.28; // no two syllables quite alike
+          }
+          jitterSmooth += (jitter - jitterSmooth) * (1 - Math.exp(-dt / 0.08));
+          // Coarticulation: start shaping the next sound before this one ends.
+          const f = u.pos - i;
+          const blend = f < 0.45 ? 0 : ((f - 0.45) / 0.55) ** 2 * (3 - 2 * ((f - 0.45) / 0.55));
+          const a = visemeAt(u.text, i);
+          const b = visemeAt(u.text, i + 1);
+          targetOpen = (a.open + (b.open - a.open) * blend) * jitterSmooth;
+          targetWidth = a.width + (b.width - a.width) * blend;
+          const level = audioLevel();
+          if (level !== null) targetOpen *= Math.min(1.25, 0.2 + level * 1.6);
 
-        let w = -1;
-        while (w + 1 < u.starts.length && u.starts[w + 1] <= u.pos) w++;
-        if (w !== word) {
-          word = w;
-          setSaidWord(w);
+          let w = -1;
+          while (w + 1 < u.starts.length && u.starts[w + 1] <= u.pos) w++;
+          if (w !== word) {
+            word = w;
+            setSaidWord(w);
+          }
         }
       }
 
-      open += (targetOpen - open) * (1 - Math.exp(-dt / 0.05));
-      width += (targetWidth - width) * (1 - Math.exp(-dt / 0.07));
-      const g = mouthGeometry(open, width);
+      // Critically damped-ish springs: quick, but never a hard jump.
+      const k = 520;
+      const c = 2 * Math.sqrt(k) * 0.9;
+      openV += (k * (targetOpen - open) - c * openV) * dt;
+      open = Math.max(0, Math.min(1.3, open + openV * dt));
+      widthV += (k * 0.7 * (targetWidth - width) - c * 0.84 * widthV) * dt;
+      width += widthV * dt;
+
+      // Mood sway fades in and out rather than switching on and off.
+      const m = moodNow.current;
+      const targetAmp = still ? 0 : m === "happy" ? 3 : m === "dizzy" ? 5.5 : 0;
+      swayAmp += (targetAmp - swayAmp) * (1 - Math.exp(-dt / 0.5));
+      swayPhase += dt * (m === "dizzy" ? 3.9 : 2.4);
+    };
+
+    const tick = (now: number) => {
+      let dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      // Small fixed steps keep the springs stable even after a dropped frame.
+      while (dt > 0) {
+        const h = Math.min(dt, 1 / 120);
+        step(h, now);
+        dt -= h;
+      }
+
       const r = rig.current;
-      r.mouth?.setAttribute("d", g.d);
-      r.teeth?.setAttribute("d", g.teeth);
-      r.teeth?.setAttribute("opacity", g.showTeeth ? "1" : "0");
-      if (r.tongue) {
-        r.tongue.setAttribute("cy", g.tongue.cy.toFixed(2));
-        r.tongue.setAttribute("rx", g.tongue.rx.toFixed(2));
-        r.tongue.setAttribute("ry", g.tongue.ry.toFixed(2));
-        r.tongue.setAttribute("opacity", g.tongue.visible ? "1" : "0");
+      const talkingNowValue = talkingNow.current;
+      const busy = talkingNowValue || open > 0.015 || env > 0.02;
+      if (busy && !drawing) {
+        drawing = true;
+        // Coming out of the arrival grin: start the spring from the grin, not from shut.
+        if (moodNow.current === "party") {
+          open = GRIN_OPEN;
+          width = GRIN_WIDTH;
+        }
+        setClosing(!talkingNowValue);
+      } else if (drawing && !talkingNowValue && !busy) {
+        // Mouth has eased shut; the talking mouth fades out from here, still shut.
+        drawing = false;
+        setClosing(false);
+      } else if (drawing && !talkingNowValue) {
+        setClosing(true);
       }
+      if (drawing) drawMouth(open, width);
+      // The open mouth only shows at rest when celebrating: give it the grin then
+      // (it fades in), and never mid-fade after talking, which would flash.
+      else if (moodNow.current === "party") drawMouth(GRIN_OPEN, GRIN_WIDTH);
+      // Otherwise keep the hidden mouth shut, so talking always opens from closed lips.
+      else drawMouth(0, 1);
+
       if (!still) {
         const t = now / 1000;
-        r.nod?.setAttribute("transform", `rotate(${(Math.sin(t * 4.7) * 1.4 + open * 1.6).toFixed(2)} 80 140) translate(0 ${(-open * 1.6).toFixed(2)})`);
-        r.arm?.setAttribute("transform", `rotate(${(-12 - 12 * Math.sin(t * 2.6)).toFixed(2)} 115 150)`);
+        const sway = Math.sin(swayPhase) * swayAmp;
+        const nod = (Math.sin(t * 4.7) * 1.4 + open * 1.6) * env;
+        if (Math.abs(sway) + Math.abs(nod) + open * env > 0.01) {
+          set(r.nod, "transform", `rotate(${(sway + nod).toFixed(2)} 80 140) translate(0 ${(-open * 1.6 * env).toFixed(2)})`);
+        } else {
+          clear(r.nod, "transform");
+        }
+        if (env > 0.01) set(r.arm, "transform", `rotate(${((-12 - 12 * Math.sin(t * 2.6)) * env).toFixed(2)} 115 150)`);
+        else clear(r.arm, "transform");
       }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
-
-    return () => {
-      cancelAnimationFrame(frame);
-      const r = rig.current;
-      r.mouth?.setAttribute("d", GRIN.d);
-      r.teeth?.setAttribute("d", GRIN.teeth);
-      r.teeth?.setAttribute("opacity", "1");
-      r.tongue?.setAttribute("cy", String(GRIN.tongue.cy));
-      r.tongue?.setAttribute("rx", String(GRIN.tongue.rx));
-      r.tongue?.setAttribute("ry", String(GRIN.tongue.ry));
-      r.tongue?.setAttribute("opacity", "1");
-      r.nod?.removeAttribute("transform");
-      r.arm?.removeAttribute("transform");
-    };
-  }, [talking]);
+    return () => cancelAnimationFrame(frame);
+  }, [hidden]);
 
   const poke = () => {
-    setHop((n) => n + 1);
+    // Played on the existing drawing, so his bob and blink don't restart.
+    figure.current?.querySelector("svg")?.animate(
+      [
+        { transform: "translateY(0)" },
+        { transform: "translateY(-16px) rotate(-4deg)", offset: 0.4 },
+        { transform: "translateY(0)" },
+      ],
+      { duration: 450, easing: "cubic-bezier(0.3, 1.5, 0.6, 1)" },
+    );
     let i = Math.floor(Math.random() * QUIPS.length);
     if (i === lastQuip.current) i = (i + 1) % QUIPS.length;
     lastQuip.current = i;
@@ -220,7 +312,7 @@ export function Mascot({ mood, voiceOn, besideDrawer = false }: {
   }
 
   return (
-    <div className={`pip mood-${mood}${talking ? " talking" : ""}${besideDrawer ? " beside-drawer" : ""}`}>
+    <div className={`pip mood-${mood}${talking || closing ? " talking" : ""}${besideDrawer ? " beside-drawer" : ""}`}>
       <div className={`pip-bubble${bubble ? " show" : ""}`} aria-live="polite">
         {talking ? <Karaoke text={bubble} saidWord={saidWord} /> : bubble}
       </div>
@@ -228,8 +320,8 @@ export function Mascot({ mood, voiceOn, besideDrawer = false }: {
         ×
       </button>
       <button
-        key={hop}
-        className={`pip-figure${hop ? " hop" : ""}`}
+        ref={figure}
+        className="pip-figure"
         onClick={poke}
         aria-label="Pip, your co-pilot. Tap for encouragement."
       >

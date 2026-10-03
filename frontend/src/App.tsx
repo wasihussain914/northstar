@@ -490,6 +490,8 @@ function pipMood(tutor: ReturnType<typeof useTutor>, arrived: boolean): PipMood 
   if (tutor.errorLine != null) return "worried";
   if (tutor.phase === "checking") return "thinking";
   if (tutor.result && tutor.phase === "ready") return "happy";
+  // You're writing: he watches the board instead of blanking out between checks.
+  if (tutor.phase === "watching") return "watching";
   return "idle";
 }
 

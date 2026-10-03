@@ -1881,7 +1881,7 @@ canvas.ink.tool-eraser {
 .pip-think,
 .pip-q {
   opacity: 0;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.18s ease;
 }
 
 .pip-m-smile {
@@ -1902,8 +1902,9 @@ canvas.ink.tool-eraser {
   opacity: 0.9;
 }
 
-.pip.mood-happy .pip-head {
-  animation: pip-sway 2.6s ease-in-out infinite;
+/* Watching you write: eyes down toward the board. */
+.pip.mood-watching .pip-look {
+  transform: translate(-3px, 3px);
 }
 
 .pip.mood-thinking .pip-look {
@@ -1972,8 +1973,10 @@ canvas.ink.tool-eraser {
   transform: rotate(-28deg);
 }
 
-.pip.mood-worried .pip-body {
-  animation: pip-shake 0.5s ease-in-out 1, pip-bob 3.2s ease-in-out 0.5s infinite;
+/* One-shot moves go on the figure, a separate layer, so the idle bob on
+   .pip-body never restarts (and never jumps) when the mood changes. */
+.pip.mood-worried .pip-figure {
+  animation: pip-shake 0.5s ease-in-out;
 }
 
 .pip.mood-worried .pip-q {
@@ -1981,8 +1984,9 @@ canvas.ink.tool-eraser {
   animation: pip-pop 0.4s cubic-bezier(0.3, 1.6, 0.6, 1);
 }
 
-.pip.mood-party .pip-body {
-  animation: pip-jump 0.55s ease-out 4, pip-bob 3.2s ease-in-out 2.2s infinite;
+.pip.mood-party .pip-figure {
+  transform-origin: 50% 100%;
+  animation: pip-jump 0.55s ease-out 4;
 }
 
 .pip.mood-party .pip-arm-l {
@@ -2015,14 +2019,6 @@ canvas.ink.tool-eraser {
 
 .pip.mood-dizzy .pip-dizzy path {
   animation: pip-spin 1.4s linear infinite;
-}
-
-.pip.mood-dizzy .pip-head {
-  animation: pip-wobble 1.6s ease-in-out infinite;
-}
-
-.pip-figure.hop svg {
-  animation: pip-hop 0.45s cubic-bezier(0.3, 1.5, 0.6, 1);
 }
 
 /* Speech bubble: captions of whatever Pip says */
@@ -2123,8 +2119,8 @@ canvas.ink.tool-eraser {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pip *,
-  .pip-figure.hop svg {
+  .pip,
+  .pip * {
     animation: none !important;
   }
 }
@@ -2137,11 +2133,6 @@ canvas.ink.tool-eraser {
 @keyframes pip-blink {
   0%, 92%, 100% { transform: scaleY(1); }
   95% { transform: scaleY(0.1); }
-}
-
-@keyframes pip-sway {
-  0%, 100% { transform: rotate(-3deg); }
-  50% { transform: rotate(3deg); }
 }
 
 @keyframes pip-dots {
@@ -2170,17 +2161,6 @@ canvas.ink.tool-eraser {
 
 @keyframes pip-spin {
   to { transform: rotate(360deg); }
-}
-
-@keyframes pip-wobble {
-  0%, 100% { transform: rotate(-5deg); }
-  50% { transform: rotate(5deg); }
-}
-
-@keyframes pip-hop {
-  0% { transform: translateY(0); }
-  40% { transform: translateY(-16px) rotate(-4deg); }
-  100% { transform: translateY(0); }
 }
 
 /* When the route drawer slides over the board (below the docked-sidebar

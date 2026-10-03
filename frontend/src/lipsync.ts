@@ -34,6 +34,7 @@ const GAP: Viseme = { open: 0.08, width: 1 };
 
 /** The mouth shape for the character at `pos` in `text`. */
 export function visemeAt(text: string, pos: number): Viseme {
+  if (pos >= text.length) return PAUSE; // finished: lips together
   const ch = (text[Math.floor(pos)] ?? " ").toLowerCase();
   if (ch === " ") return GAP;
   if (/[.,!?;:…"'()]/.test(ch)) return PAUSE;
@@ -93,4 +94,6 @@ export function mouthGeometry(open: number, width: number): MouthGeometry {
 }
 
 /** Pip's big grin when he isn't talking (arrival celebration). */
-export const GRIN = mouthGeometry(0.85, 1.1);
+export const GRIN_OPEN = 0.85;
+export const GRIN_WIDTH = 1.1;
+export const GRIN = mouthGeometry(GRIN_OPEN, GRIN_WIDTH);
