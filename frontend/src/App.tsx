@@ -2,7 +2,9 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { health } from "./api";
 import { Board, type TeacherInk, type Tool } from "./board/Board";
 import { LINES, lineOf, type Stroke } from "./board/geometry";
-// import { textToStrokes } from "./board/handwriting"; // superseded by vector glyph renderer
+// Font-rasterised handwriting: still the working path for typed steps, the
+// demo, and the dev helper until the vector glyph renderer can emit strokes.
+import { textToStrokes } from "./board/handwriting";
 import { AskCard } from "./AskCard";
 import { DEMOS, runDemo } from "./demo";
 import { DestinationCard } from "./DestinationCard";
@@ -202,9 +204,7 @@ export default function App() {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     (window as unknown as { northstar: object }).northstar = {
-      write: (line: number, text: string) => {
-        void line; void text; // textToStrokes removed — use the glyph renderer at #glyphs
-      },
+      write: (line: number, text: string) => dispatch({ type: "addMany", strokes: textToStrokes(text, line) }),
       erase: (line: number) =>
         dispatch({ type: "erase", ids: strokesRef.current.filter((s) => lineOf(s) === line).map((s) => s.id) }),
       clear: () => dispatch({ type: "clear" }),
@@ -301,12 +301,11 @@ export default function App() {
   const usedLines = new Set(strokes.map(lineOf));
   const lastUsed = usedLines.size ? Math.max(...usedLines) : 0;
   const typeTarget = selectedLine ?? (lastUsed < LINES ? lastUsed + 1 : null);
-  const typeStep = (_text: string) => {
+  const typeStep = (text: string) => {
     if (typeTarget == null) return;
     unlockSpeech();
     stopDemo();
-    // textToStrokes removed — typed steps no longer rasterise a font
-    // dispatch({ type: "replaceLine", line: typeTarget, strokes: textToStrokes(text, typeTarget) });
+    dispatch({ type: "replaceLine", line: typeTarget, strokes: textToStrokes(text, typeTarget) });
     setSelectedLine(null);
   };
 
