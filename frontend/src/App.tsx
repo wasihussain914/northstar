@@ -414,6 +414,8 @@ export default function App() {
             </div>
             <Board
               strokes={strokes}
+              problem={problem}
+              promptStart={tutor.phase === "empty"}
               tool={tool}
               markers={tutor.markers}
               errorLine={tutor.errorLine}
@@ -495,6 +497,7 @@ function StatusPill({ tutor, arrived, onTap }: {
     : tone === "off" ? `Off route — line ${tutor.errorLine}`
     : tone === "arrived" ? "You have arrived"
     : tone === "on" ? (tutor.result!.eta_steps > 0 ? `On route · ~${tutor.result!.eta_steps} to go` : "On route")
+    : tutor.phase === "empty" ? "Start on line 1"
     : "Write one step per line";
   return (
     <button className={`status-pill tone-${tone}`} onClick={onTap} title="Show the route">

@@ -86,6 +86,13 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
         </section>
       )}
 
+      {phase === "empty" && errorLine == null && (
+        <section className="card">
+          <span className="eyebrow">Next turn</span>
+          <p className="next-hint">Start on line 1. Write the first step under the question.</p>
+        </section>
+      )}
+
       {errorLine == null && result?.next_step_hint && phase !== "empty" && (
         <section className="card">
           {showNext ? (
