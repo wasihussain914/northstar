@@ -1894,9 +1894,7 @@ canvas.ink.tool-eraser {
 }
 
 .pip.talking .pip-m-open {
-  opacity: 1;
-  transform-origin: 50% 15%;
-  animation: pip-talk 0.17s ease-in-out infinite alternate;
+  opacity: 1; /* shaped frame by frame by the lip-sync in Mascot.tsx */
 }
 
 /* Moods */
@@ -2141,11 +2139,6 @@ canvas.ink.tool-eraser {
   95% { transform: scaleY(0.1); }
 }
 
-@keyframes pip-talk {
-  from { transform: scaleY(0.3); }
-  to { transform: scaleY(1.05); }
-}
-
 @keyframes pip-sway {
   0%, 100% { transform: rotate(-3deg); }
   50% { transform: rotate(3deg); }
@@ -2207,4 +2200,14 @@ canvas.ink.tool-eraser {
 @keyframes pip-step-aside {
   from { transform: translateX(40px); opacity: 0; }
   to { transform: none; opacity: 1; }
+}
+
+/* Karaoke caption: words light up as Pip says them */
+.pip-bubble .ahead {
+  color: #a3a9b5;
+}
+
+.pip-bubble .said {
+  color: inherit;
+  transition: color 0.12s ease;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { caption, onSpeech, speak } from "./voice";
+import { GRIN, charWeight, mouthGeometry, visemeAt, wordStarts } from "./lipsync";
+import { audioLevel, caption, onSpeech, onSpeechSync, speak } from "./voice";
 
 /**
  * Pip: North Star's co-pilot, dressed for Cornell (carnelian and white, a
@@ -27,6 +28,27 @@ const QUIPS = [
 
 const HIDE_KEY = "ns-pip-hidden";
 
+/** The SVG parts the talking animation moves directly, frame by frame. */
+interface Rig {
+  nod: SVGGElement | null;
+  arm: SVGGElement | null;
+  mouth: SVGPathElement | null;
+  teeth: SVGPathElement | null;
+  tongue: SVGEllipseElement | null;
+}
+
+/** Where we are in the sentence being spoken. */
+interface Utterance {
+  text: string;
+  cps: number;
+  starts: number[];
+  startedAt: number;
+  /** The engine has said it started (or we gave up waiting for it to). */
+  started: boolean;
+  /** Character position, fractional. */
+  pos: number;
+}
+
 function readHidden(): boolean {
   try {
     return localStorage.getItem(HIDE_KEY) === "1";
@@ -51,24 +73,126 @@ export function Mascot({ mood, voiceOn, besideDrawer = false }: {
 }) {
   const [talking, setTalking] = useState(false);
   const [bubble, setBubble] = useState("");
+  // Index of the last word spoken, for the karaoke caption (-1: none yet).
+  const [saidWord, setSaidWord] = useState(-1);
   const [hop, setHop] = useState(0);
   const [hidden, setHidden] = useState(readHidden);
   const hideTimer = useRef<number | undefined>(undefined);
   const lastQuip = useRef(-1);
+  const rig = useRef<Rig>({ nod: null, arm: null, mouth: null, teeth: null, tongue: null });
+  const utterance = useRef<Utterance>({ text: "", cps: 14.5, starts: [], startedAt: 0, started: false, pos: 0 });
 
-  // Lip-sync and caption whatever the GPS voice says.
+  // Caption whatever the GPS voice says, and follow along as it's spoken.
   useEffect(() => {
-    const off = onSpeech((s) => {
+    const offSpeech = onSpeech((s) => {
       window.clearTimeout(hideTimer.current);
       setTalking(s.speaking && !s.silent);
-      if (s.speaking) setBubble(s.text);
-      else hideTimer.current = window.setTimeout(() => setBubble(""), 1600);
+      if (s.speaking) {
+        const u = utterance.current;
+        if (s.text !== u.text || !u.text) {
+          utterance.current = {
+            text: s.text, cps: s.cps, starts: wordStarts(s.text), startedAt: performance.now(), started: false, pos: 0,
+          };
+          setSaidWord(-1);
+        } else {
+          u.cps = s.cps; // refined once the neural voice's length is known
+        }
+        setBubble(s.text);
+      } else {
+        hideTimer.current = window.setTimeout(() => setBubble(""), 1600);
+      }
+    });
+    const offSync = onSpeechSync((charIndex) => {
+      const u = utterance.current;
+      u.started = true;
+      if (charIndex === 0) u.startedAt = performance.now();
+      u.pos = charIndex;
     });
     return () => {
-      off();
+      offSpeech();
+      offSync();
       window.clearTimeout(hideTimer.current);
     };
   }, []);
+
+  // While talking: shape the mouth to the letter being said, nod along, gesture.
+  useEffect(() => {
+    if (!talking) return;
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    let frame = 0;
+    let last = performance.now();
+    let open = 0;
+    let width = 1;
+    let charIdx = -1;
+    let jitter = 1;
+    let word = -1;
+
+    const tick = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const u = utterance.current;
+      // Engines that never report starting (and silenced tests) still animate.
+      if (!u.started && now - u.startedAt > 450) u.started = true;
+
+      let targetOpen = 0;
+      let targetWidth = 1;
+      if (u.started) {
+        u.pos = Math.min(u.text.length, u.pos + (dt * u.cps) / charWeight(u.text[Math.floor(u.pos)]));
+        const i = Math.floor(u.pos);
+        if (i !== charIdx) {
+          charIdx = i;
+          jitter = 0.82 + Math.random() * 0.32; // no two syllables quite alike
+        }
+        const v = visemeAt(u.text, u.pos);
+        targetOpen = v.open * jitter;
+        targetWidth = v.width;
+        const level = audioLevel();
+        if (level !== null) targetOpen *= Math.min(1.25, 0.2 + level * 1.6);
+
+        let w = -1;
+        while (w + 1 < u.starts.length && u.starts[w + 1] <= u.pos) w++;
+        if (w !== word) {
+          word = w;
+          setSaidWord(w);
+        }
+      }
+
+      open += (targetOpen - open) * (1 - Math.exp(-dt / 0.05));
+      width += (targetWidth - width) * (1 - Math.exp(-dt / 0.07));
+      const g = mouthGeometry(open, width);
+      const r = rig.current;
+      r.mouth?.setAttribute("d", g.d);
+      r.teeth?.setAttribute("d", g.teeth);
+      r.teeth?.setAttribute("opacity", g.showTeeth ? "1" : "0");
+      if (r.tongue) {
+        r.tongue.setAttribute("cy", g.tongue.cy.toFixed(2));
+        r.tongue.setAttribute("rx", g.tongue.rx.toFixed(2));
+        r.tongue.setAttribute("ry", g.tongue.ry.toFixed(2));
+        r.tongue.setAttribute("opacity", g.tongue.visible ? "1" : "0");
+      }
+      if (!still) {
+        const t = now / 1000;
+        r.nod?.setAttribute("transform", `rotate(${(Math.sin(t * 4.7) * 1.4 + open * 1.6).toFixed(2)} 80 140) translate(0 ${(-open * 1.6).toFixed(2)})`);
+        r.arm?.setAttribute("transform", `rotate(${(-12 - 12 * Math.sin(t * 2.6)).toFixed(2)} 115 150)`);
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      const r = rig.current;
+      r.mouth?.setAttribute("d", GRIN.d);
+      r.teeth?.setAttribute("d", GRIN.teeth);
+      r.teeth?.setAttribute("opacity", "1");
+      r.tongue?.setAttribute("cy", String(GRIN.tongue.cy));
+      r.tongue?.setAttribute("rx", String(GRIN.tongue.rx));
+      r.tongue?.setAttribute("ry", String(GRIN.tongue.ry));
+      r.tongue?.setAttribute("opacity", "1");
+      r.nod?.removeAttribute("transform");
+      r.arm?.removeAttribute("transform");
+    };
+  }, [talking]);
 
   const poke = () => {
     setHop((n) => n + 1);
@@ -98,7 +222,7 @@ export function Mascot({ mood, voiceOn, besideDrawer = false }: {
   return (
     <div className={`pip mood-${mood}${talking ? " talking" : ""}${besideDrawer ? " beside-drawer" : ""}`}>
       <div className={`pip-bubble${bubble ? " show" : ""}`} aria-live="polite">
-        {bubble}
+        {talking ? <Karaoke text={bubble} saidWord={saidWord} /> : bubble}
       </div>
       <button className="pip-hide" onClick={() => toggleHidden(true)} aria-label="Hide Pip" title="Hide Pip">
         ×
@@ -109,9 +233,27 @@ export function Mascot({ mood, voiceOn, besideDrawer = false }: {
         onClick={poke}
         aria-label="Pip, your co-pilot. Tap for encouragement."
       >
-        <PipSvg />
+        <PipSvg rig={rig.current} />
       </button>
     </div>
+  );
+}
+
+/** The caption, lighting up each word as it's spoken. */
+function Karaoke({ text, saidWord }: { text: string; saidWord: number }) {
+  let word = -1;
+  return (
+    <>
+      {text.split(/(\s+)/).map((part, i) => {
+        if (!part.trim()) return part;
+        word++;
+        return (
+          <span key={i} className={word <= saidWord ? "said" : "ahead"}>
+            {part}
+          </span>
+        );
+      })}
+    </>
   );
 }
 
@@ -122,7 +264,7 @@ const RED_DARK = "#8c1515";
 const GOLD = "#f5c451";
 const INK = "#2a211c";
 
-function PipSvg() {
+function PipSvg({ rig }: { rig: Rig }) {
   return (
     <svg viewBox="0 0 160 200" aria-hidden="true">
       <ellipse className="pip-shadow" cx="80" cy="194" rx="36" ry="5" fill="rgba(0,0,0,0.22)" />
@@ -149,10 +291,12 @@ function PipSvg() {
           <rect x="38" y="163" width="13" height="3" fill="#fff" />
           <circle cx="44.5" cy="174" r="6.5" fill={SKIN} stroke={SKIN_EDGE} strokeWidth="1.5" />
         </g>
+        <g ref={(el) => { rig.arm = el; }}>
         <g className="pip-arm pip-arm-r">
           <rect x="109" y="146" width="13" height="27" rx="6.5" fill={RED} />
           <rect x="109" y="163" width="13" height="3" fill="#fff" />
           <circle cx="115.5" cy="174" r="6.5" fill={SKIN} stroke={SKIN_EDGE} strokeWidth="1.5" />
+        </g>
         </g>
 
         {/* Big Red varsity sweater with a white C */}
@@ -168,6 +312,7 @@ function PipSvg() {
         <path d="M58 145 L66 148.5 L63 168 L54 165 Z" fill="url(#pip-stripes)" stroke={RED_DARK} strokeWidth="1" />
         <path d="M54 165 L53 169 M57 166 L56.4 170 M60 167 L59.5 171 M63 168 L62.6 172" stroke={RED_DARK} strokeWidth="1.4" strokeLinecap="round" />
 
+        <g ref={(el) => { rig.nod = el; }}>
         <g className="pip-head">
           {/* ears */}
           <circle cx="23" cy="92" r="9.5" fill={SKIN} stroke={SKIN_EDGE} strokeWidth="2" />
@@ -217,10 +362,20 @@ function PipSvg() {
           <path className="pip-m pip-m-smile" d="M67 110 Q80 122 93 110" fill="none" stroke={INK} strokeWidth="3.5" strokeLinecap="round" />
           <path className="pip-m pip-m-worry" d="M70 118 Q80 110 90 118" fill="none" stroke={INK} strokeWidth="3.5" strokeLinecap="round" />
           <ellipse className="pip-m pip-m-o" cx="80" cy="115" rx="4.5" ry="5" fill="#5a1f24" />
+          {/* the talking mouth: reshaped every frame while Pip speaks, a grin otherwise */}
           <g className="pip-m pip-m-open">
-            <path d="M66 108 Q80 106 94 108 Q93 126 80 127 Q67 126 66 108 Z" fill="#5a1f24" />
-            <ellipse cx="80" cy="121" rx="7.5" ry="4" fill="#e86a6a" />
+            <path ref={(el) => { rig.mouth = el; }} d={GRIN.d} fill="#5a1f24" />
+            <ellipse
+              ref={(el) => { rig.tongue = el; }}
+              cx="80"
+              cy={GRIN.tongue.cy}
+              rx={GRIN.tongue.rx}
+              ry={GRIN.tongue.ry}
+              fill="#e86a6a"
+            />
+            <path ref={(el) => { rig.teeth = el; }} d={GRIN.teeth} fill="#fff" />
           </g>
+        </g>
         </g>
       </g>
 
