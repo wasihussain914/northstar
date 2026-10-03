@@ -114,20 +114,44 @@ EXPLAIN_SCHEMA: dict[str, Any] = {
 PROBLEM_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "problem": _str("The problem as one short line of plain text, e.g. 'Solve 2(x − 3) + 4 = 10'"),
-        "latex": _str("Just the math as LaTeX (no surrounding $), or empty if there is none"),
+        "problems": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "problem": _str("The problem as one short line of plain text, e.g. 'Solve 2(x − 3) + 4 = 10'"),
+                    "latex": _str("Just the math as LaTeX (no surrounding $), or empty if there is none"),
+                },
+                "required": ["problem", "latex"],
+                "additionalProperties": False,
+            },
+        },
     },
-    "required": ["problem", "latex"],
+    "required": ["problems"],
     "additionalProperties": False,
 }
 
-READ_PROBLEM = """The image is a crop of a student's homework (a photo or a PDF page) showing the problem they \
-are about to work on. Read it and return:
+READ_PROBLEM = """The image is a crop of a student's homework (a photo or a PDF page). Find every distinct \
+math problem in it, in reading order. For each one return:
 - problem: the problem as one short line of plain text the app can display and reuse, keeping the instruction \
-word if there is one ("Solve", "Simplify", ...) and adding a fitting one if there isn't.
+word if there is one ("Solve", "Simplify", ...) and adding a fitting one if there isn't. Drop problem numbers \
+like "3)".
 - latex: just the math as LaTeX, no surrounding $.
-If the crop shows more than one problem, pick the most prominent or first one. If it isn't a math problem at \
-all, return an empty problem."""
+A tight crop around one problem returns exactly that one. Skip headings, instructions and worked examples; \
+if there are no math problems at all, return an empty list."""
+
+# Languages the tutor can guide in (student-facing text and speech only).
+LANGUAGES = {"en": "English", "es": "Spanish", "fr": "French", "zh": "Simplified Chinese",
+             "hi": "Hindi", "bn": "Bengali"}
+
+
+def lang_note(lang: str) -> str:
+    """Prompt line switching every student-facing message to the student's language."""
+    if lang == "en" or lang not in LANGUAGES:
+        return ""
+    return (f"\n\nThe student speaks {LANGUAGES[lang]}: write every student-facing message (hints, nudges, "
+            f"encouragement, route notes, next-step hints, spoken answers) in {LANGUAGES[lang]}. "
+            "Keep latex and sympy fields exactly as written on the board.")
 
 
 async def _structured(content: list[dict] | str, schema: dict, max_tokens: int = 8000) -> dict:
@@ -172,10 +196,10 @@ async def _structured(content: list[dict] | str, schema: dict, max_tokens: int =
 
 
 async def read_board(problem: str, image_png_b64: str, line_numbers: list[int],
-                     typed: dict[int, str] | None = None) -> dict:
+                     typed: dict[int, str] | None = None, lang: str = "en") -> dict:
     labels = ", ".join(str(n) for n in line_numbers) or "none"
     text = (f"Problem the student is solving: {problem or '(not given; infer it from the board)'}\n"
-            f"Labeled lines on the board: {labels}")
+            f"Labeled lines on the board: {labels}{lang_note(lang)}")
     if typed:
         known = "\n".join(f"line {n}: {t}" for n, t in sorted(typed.items()) if n in line_numbers)
         if known:
@@ -203,13 +227,13 @@ write math in words a person would say ("two x minus six equals ten"), with no L
 
 
 async def ask(problem: str, question: str, image_png_b64: str | None, transcript: dict[int, str] | None,
-              context: str) -> dict:
+              context: str, lang: str = "en") -> dict:
     content: list[dict] = []
     if image_png_b64:
         content.append({"type": "image", "source": {"type": "base64", "media_type": "image/png",
                                                     "data": image_png_b64}})
     content.append({"type": "text", "text": (
-        f"{ASK_INSTRUCTIONS}\n\nProblem: {problem or '(not given)'}\n"
+        f"{ASK_INSTRUCTIONS}{lang_note(lang)}\n\nProblem: {problem or '(not given)'}\n"
         f"What the last check found:\n{context or '(no check yet)'}\n\n"
         f"Student's question: {question}")})
     try:
@@ -242,9 +266,10 @@ Also write spoken_nudge: one short sentence (under 15 words) a GPS voice could s
 "Recalculating. Take another look at the sign in line 3.\""""
 
 
-async def explain_line(problem: str, lines: list[dict], line: int, detail: str, note: str = "") -> dict:
+async def explain_line(problem: str, lines: list[dict], line: int, detail: str, note: str = "",
+                       lang: str = "en") -> dict:
     work = "\n".join(f"line {l['line']}: {l['latex']}" for l in lines if l.get("latex"))
     prompt = (f"Problem: {problem}\n\nThe student's work so far:\n{work}\n\n"
               f"Line {line} is the first wrong turn: it does not follow from the line before it"
-              f"{' (for you only: ' + detail + ')' if detail else ''}.\n{HINT_RULES}")
+              f"{' (for you only: ' + detail + ')' if detail else ''}.\n{HINT_RULES}{lang_note(lang)}")
     return await _structured(prompt, EXPLAIN_SCHEMA, max_tokens=4000)

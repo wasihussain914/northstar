@@ -18,10 +18,12 @@ interface Props {
   trip: Trip;
   onHint: () => void;
   onNewTrip: () => void;
+  /** Button label on the trip summary ("New problem", "Next stop · 2 of 4"). */
+  nextLabel?: string;
   children?: React.ReactNode;
 }
 
-export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, onHint, onNewTrip, children }: Props) {
+export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, onHint, onNewTrip, nextLabel, children }: Props) {
   const { result, errorLine, errorKey, phase, failure } = tutor;
   const [hintsShown, setHintsShown] = useState(0);
   const [showNext, setShowNext] = useState(false);
@@ -48,7 +50,7 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
         onRetry={tutor.checkNow}
       />
 
-      {trip.durationMs != null && <TripSummary trip={trip} onNewTrip={onNewTrip} />}
+      {trip.durationMs != null && <TripSummary trip={trip} onNewTrip={onNewTrip} nextLabel={nextLabel ?? "New problem"} />}
 
       {errorLine != null && result && result.hints.length > 0 && (
         <section className="card hint-card">
@@ -108,7 +110,7 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
   );
 }
 
-function TripSummary({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
+function TripSummary({ trip, onNewTrip, nextLabel }: { trip: Trip; onNewTrip: () => void; nextLabel: string }) {
   const secs = Math.round((trip.durationMs ?? 0) / 1000);
   const time = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`;
   const recap =
@@ -138,7 +140,7 @@ function TripSummary({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void })
         </div>
       </dl>
       <button className="btn primary wide" onClick={onNewTrip}>
-        New problem
+        {nextLabel}
       </button>
     </section>
   );

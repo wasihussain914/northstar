@@ -26,7 +26,8 @@ def _kind(text: str) -> str:
     return "equation" if "=" in text else "expression"
 
 
-async def read_board(problem: str, transcript: dict[int, str] | None, lines: list[int]) -> dict:
+async def read_board(problem: str, transcript: dict[int, str] | None, lines: list[int],
+                     lang: str = "en") -> dict:
     if not transcript:
         raise TutorError("Fake vision mode only reads lines written with northstar.write().")
     math = _problem_math(problem)
@@ -46,11 +47,16 @@ async def read_board(problem: str, transcript: dict[int, str] | None, lines: lis
 
 
 async def read_problem(image_png_b64: str) -> dict:
-    # No vision here; hand back a known problem so the capture flow can be tested free.
-    return {"problem": "Solve 2(x - 3) + 4 = 10", "latex": "2(x - 3) + 4 = 10"}
+    # No vision here; hand back a known worksheet so the capture and trip flows
+    # can be tested free.
+    return {"problems": [
+        {"problem": "Solve 2(x - 3) + 4 = 10", "latex": "2(x - 3) + 4 = 10"},
+        {"problem": "Solve x/3 + 1 = 5", "latex": "x/3 + 1 = 5"},
+    ]}
 
 
-async def explain_line(problem: str, lines: list[dict], line: int, detail: str, note: str = "") -> dict:
+async def explain_line(problem: str, lines: list[dict], line: int, detail: str, note: str = "",
+                       lang: str = "en") -> dict:
     # `detail` can contain solution values; only the student-safe `note` is used.
     return {
         "hints": [
@@ -63,5 +69,5 @@ async def explain_line(problem: str, lines: list[dict], line: int, detail: str, 
 
 
 async def ask(problem: str, question: str, image_png_b64: str | None, transcript: dict[int, str] | None,
-              context: str) -> dict:
+              context: str, lang: str = "en") -> dict:
     return {"answer": f"(fake mode) You asked: {question}. Try comparing each line with the one above it."}

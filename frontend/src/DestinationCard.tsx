@@ -7,6 +7,10 @@ interface Props {
   latex: string;
   /** Cropped homework image the problem was read from, if any. */
   image: string | null;
+  /** A trip with several stops: which one we're on, and how to jump. */
+  stopIndex?: number;
+  stopCount?: number;
+  onJumpStop?: (i: number) => void;
   onEdit: (problem: string) => void;
   onScan: () => void;
 }
@@ -15,7 +19,7 @@ interface Props {
  * Where we're headed: the problem, front and center above the paper — as the
  * scanned crop of real homework when there is one, editable text when not.
  */
-export function DestinationCard({ problem, latex, image, onEdit, onScan }: Props) {
+export function DestinationCard({ problem, latex, image, stopIndex = 0, stopCount = 0, onJumpStop, onEdit, onScan }: Props) {
   const [editing, setEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -29,6 +33,20 @@ export function DestinationCard({ problem, latex, image, onEdit, onScan }: Props
     <section className="destination-card">
       <div className="destination-main">
         <span className="eyebrow">Destination</span>
+        {stopCount > 1 && (
+          <span className="trip-strip" aria-label={`Stop ${stopIndex + 1} of ${stopCount}`}>
+            <span className="stop-chip">Stop {stopIndex + 1} of {stopCount}</span>
+            {Array.from({ length: stopCount }, (_, i) => (
+              <button
+                key={i}
+                className={`stop-dot${i === stopIndex ? " here" : ""}${i < stopIndex ? " done" : ""}`}
+                onClick={() => onJumpStop?.(i)}
+                aria-label={`Go to stop ${i + 1}`}
+                title={`Stop ${i + 1}`}
+              />
+            ))}
+          </span>
+        )}
         {image && (
           <button className="destination-snap" onClick={onScan} title="Scan a different problem">
             <img src={image} alt="The problem, from your homework" />

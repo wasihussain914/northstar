@@ -45,6 +45,12 @@ Also:
 - **Scan your homework.** Take a photo of the worksheet (or open a photo/PDF), drag a box around the problem
   you're on, and Claude reads it into the destination card — the crop of your actual homework stays pinned above
   the paper while you work. Multi-page PDFs have page arrows; editing the transcription by hand is one tap.
+- **Trips with stops.** Scan a whole worksheet and every problem Claude finds becomes a stop on one trip:
+  itinerary dots on the destination card, "Next stop · 2 of 4" when you arrive, jump between stops by tapping
+  the dots.
+- **Six languages.** Pick Español, Français, 中文, हिन्दी or বাংলা and the guidance — hints, spoken nudges,
+  encouragement, Ask answers, the GPS voice itself — switches to that language. The math and the checking don't
+  change (Accessibility track: navigation "regardless of language").
 - **Checkpoints.** The moment you start a new line, the line you just finished is checked (~0.35s), so wrong
   turns surface while your pen is still moving. A ~1.2s pause checks everything else.
 - **Ask North Star.** Tap the mic (or type) to ask "why is line 2 wrong?". Claude sees the board and the last

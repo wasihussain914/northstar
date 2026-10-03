@@ -84,6 +84,8 @@ class CheckRequest(BaseModel):
     # Lines the student typed instead of writing (line -> exact text). Claude
     # uses them verbatim; fake-vision mode reads only these.
     transcript: dict[int, str] | None = Field(default=None, max_length=60)
+    # Language for student-facing guidance (see tutor.LANGUAGES).
+    lang: str = Field(default="en", max_length=8)
 
 
 SKIP_KINDS = {"crossed_out", "not_math"}
@@ -146,9 +148,9 @@ async def check(req: CheckRequest) -> dict:
     started = time.perf_counter()
     try:
         if FAKE_VISION:
-            board = await fake_tutor.read_board(req.problem, req.transcript, req.lines)
+            board = await fake_tutor.read_board(req.problem, req.transcript, req.lines, req.lang)
         else:
-            board = await tutor.read_board(req.problem, image, req.lines, req.transcript)
+            board = await tutor.read_board(req.problem, image, req.lines, req.transcript, req.lang)
     except tutor.TutorError as exc:
         raise HTTPException(502, str(exc))
     read_ms = (time.perf_counter() - started) * 1000
@@ -166,7 +168,7 @@ async def check(req: CheckRequest) -> dict:
         flagged = next(l for l in lines if l["line"] == first_error)
         try:
             explained = await (fake_tutor if FAKE_VISION else tutor).explain_line(
-                req.problem, lines, first_error, flagged["_detail"], flagged["detail"])
+                req.problem, lines, first_error, flagged["_detail"], flagged["detail"], req.lang)
             hints, spoken = explained["hints"], explained["spoken_nudge"]
         except tutor.TutorError:
             hints = [f"Take another look at line {first_error}. Does it really follow from the line above?",
@@ -203,15 +205,17 @@ class ProblemRequest(BaseModel):
 
 @app.post("/api/problem")
 async def problem(req: ProblemRequest) -> dict:
-    """Read the problem off a cropped photo of the student's homework."""
+    """Read the problem(s) off a cropped photo of the student's homework."""
     image, _ = decode_png(req.image)
     try:
         out = await (fake_tutor if FAKE_VISION else tutor).read_problem(image)
     except tutor.TutorError as exc:
         raise HTTPException(502, str(exc))
-    if not out.get("problem"):
+    problems = [{"problem": p["problem"], "latex": p.get("latex", "")}
+                for p in out.get("problems", []) if p.get("problem")]
+    if not problems:
         raise HTTPException(422, "Couldn't find a math problem in that crop. Try a tighter one.")
-    return {"problem": out["problem"], "latex": out.get("latex", "")}
+    return {"problems": problems}
 
 
 class AskRequest(BaseModel):
@@ -220,6 +224,7 @@ class AskRequest(BaseModel):
     image: str | None = Field(default=None, max_length=12_000_000)
     context: str = Field(default="", max_length=4000)
     transcript: dict[int, str] | None = None
+    lang: str = Field(default="en", max_length=8)
 
 
 @app.post("/api/ask")
@@ -227,6 +232,6 @@ async def ask(req: AskRequest) -> dict:
     image = decode_png(req.image)[0] if req.image else None
     try:
         return await (fake_tutor if FAKE_VISION else tutor).ask(req.problem, req.question, image, req.transcript,
-                                                                req.context)
+                                                                req.context, req.lang)
     except tutor.TutorError as exc:
         raise HTTPException(502, str(exc))

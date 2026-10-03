@@ -9,9 +9,10 @@ import { DestinationCard } from "./DestinationCard";
 import { ProblemScanner, type ScannedProblem } from "./ProblemScanner";
 import { RoutePanel } from "./RoutePanel";
 import { TypeBar } from "./TypeBar";
+import { LANGUAGES, speechLocale, type Lang } from "./i18n";
 import { useTrip } from "./useTrip";
 import { useTutor } from "./useTutor";
-import { speechSupported, stopSpeaking, unlockSpeech } from "./voice";
+import { setSpeechLang, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
 
 const PRESETS = [
   "Solve 2(x − 3) + 4 = 10",
@@ -71,15 +72,28 @@ export default function App() {
   const [tool, setTool] = useState<Tool>("pen");
   const [problem, setProblem] = useState(PRESETS[0]);
   // Set when the problem came off real homework: the crop and its LaTeX.
-  const [scan, setScan] = useState<{ latex: string; image: string } | null>(null);
+  const [scan, setScan] = useState<{ latex: string; image: string | null } | null>(null);
   const [scanning, setScanning] = useState(false);
+  // A scanned worksheet becomes a trip: several problems, one route.
+  const [stops, setStops] = useState<{ problem: string; latex: string }[]>([]);
+  const [stopIndex, setStopIndex] = useState(0);
+  const [tripImage, setTripImage] = useState<string | null>(null);
+  const [lang, setLang] = useState<Lang>(() => {
+    const saved = localStorage.getItem("ns-lang");
+    return LANGUAGES.some((l) => l.code === saved) ? (saved as Lang) : "en";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("ns-lang", lang);
+    setSpeechLang(speechLocale(lang));
+  }, [lang]);
   const [voiceOn, setVoiceOn] = useState(speechSupported);
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   // The route drawer slides over the paper; wide desktops dock it (CSS).
   const [panelOpen, setPanelOpen] = useState(false);
 
-  const tutor = useTutor(strokes, problem, voiceOn);
+  const tutor = useTutor(strokes, problem, voiceOn, lang);
   const { trip, countHint } = useTrip(strokes, tutor);
 
   // Like a GPS, surface the detail when something needs attention:
@@ -109,6 +123,9 @@ export default function App() {
       problem: (p: string) => {
         setProblem(p);
         setScan(null);
+        setStops([]);
+        setStopIndex(0);
+        setTripImage(null);
       },
     };
   }, []);
@@ -137,7 +154,7 @@ export default function App() {
     setVoiceOn(!voiceOn);
   };
 
-  const newProblem = (p: string, s: { latex: string; image: string } | null = null) => {
+  const newProblem = (p: string, s: { latex: string; image: string | null } | null = null) => {
     setProblem(p);
     setScan(s);
     dispatch({ type: "clear" });
@@ -145,10 +162,42 @@ export default function App() {
     setPanelOpen(false);
   };
 
+  const clearTrip = () => {
+    setStops([]);
+    setStopIndex(0);
+    setTripImage(null);
+  };
+
   const useScan = ({ problem: p, latex, image }: ScannedProblem) => {
     stopDemo();
     setScanning(false);
+    clearTrip();
     newProblem(p, { latex, image });
+  };
+
+  const useTripScan = (list: { problem: string; latex: string }[], image: string) => {
+    stopDemo();
+    setScanning(false);
+    setStops(list);
+    setStopIndex(0);
+    setTripImage(image);
+    newProblem(list[0].problem, { latex: list[0].latex, image });
+  };
+
+  const goToStop = (i: number) => {
+    if (i < 0 || i >= stops.length) return;
+    setStopIndex(i);
+    newProblem(stops[i].problem, { latex: stops[i].latex, image: tripImage });
+  };
+
+  // The trip-summary button: next stop if the trip has one, else a fresh problem.
+  const hasNextStop = stops.length > 0 && stopIndex + 1 < stops.length;
+  const advance = () => {
+    if (hasNextStop) goToStop(stopIndex + 1);
+    else {
+      clearTrip();
+      newProblem(nextPreset(problem));
+    }
   };
 
   // Editing a scanned problem's text drops the stale LaTeX but keeps the snap.
@@ -189,6 +238,7 @@ export default function App() {
       setProblem: (p) => {
         setProblem(p);
         setScan(null);
+        clearTrip();
       },
       clear: () => dispatch({ type: "clear" }),
       add: (s) => dispatch({ type: "addMany", strokes: s }),
@@ -232,6 +282,7 @@ export default function App() {
               className={`chip${p === problem ? " active" : ""}`}
               onClick={() => {
                 stopDemo();
+                clearTrip();
                 newProblem(p);
               }}
             >
@@ -241,6 +292,19 @@ export default function App() {
         </div>
 
         <div className="topbar-actions">
+          <select
+            className="lang-pick"
+            value={lang}
+            onChange={(e) => setLang(e.target.value as Lang)}
+            aria-label="Guidance language"
+            title="Hints and voice in your language"
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.label}
+              </option>
+            ))}
+          </select>
           {speechSupported && (
             <ToolButton active={voiceOn} onClick={toggleVoice} label={voiceOn ? "Voice on" : "Voice off"}>
               {voiceOn ? (
@@ -276,6 +340,9 @@ export default function App() {
             problem={problem}
             latex={scan?.latex ?? ""}
             image={scan?.image ?? null}
+            stopIndex={stopIndex}
+            stopCount={stops.length}
+            onJumpStop={goToStop}
             onEdit={editProblem}
             onScan={() => {
               stopDemo();
@@ -338,14 +405,15 @@ export default function App() {
             voiceOn={voiceOn}
             trip={trip}
             onHint={countHint}
-            onNewTrip={() => newProblem(nextPreset(problem))}
+            onNewTrip={advance}
+            nextLabel={hasNextStop ? `Next stop · ${stopIndex + 2} of ${stops.length}` : "New problem"}
           >
-            <AskCard problem={problem} strokes={strokes} result={tutor.result} voiceOn={voiceOn} />
+            <AskCard problem={problem} strokes={strokes} result={tutor.result} voiceOn={voiceOn} lang={lang} />
           </RoutePanel>
         </aside>
       </main>
 
-      {scanning && <ProblemScanner onUse={useScan} onClose={() => setScanning(false)} />}
+      {scanning && <ProblemScanner onUse={useScan} onTrip={useTripScan} onClose={() => setScanning(false)} />}
     </div>
   );
 }

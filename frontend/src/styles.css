@@ -359,6 +359,113 @@ code {
   color: var(--gold);
 }
 
+/* Trip itinerary: one dot per stop on the worksheet. */
+.trip-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.stop-chip {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: rgba(245, 196, 81, 0.1);
+  border: 1px solid rgba(245, 196, 81, 0.4);
+  border-radius: 999px;
+  padding: 3px 9px;
+  margin-right: 3px;
+}
+
+.stop-dot {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--faint);
+  background: transparent;
+  cursor: pointer;
+}
+
+.stop-dot.done {
+  border-color: var(--green);
+  background: var(--green);
+}
+
+.stop-dot.here {
+  border-color: var(--gold);
+  background: var(--gold);
+  box-shadow: 0 0 8px rgba(245, 196, 81, 0.7);
+}
+
+/* Language picker */
+.lang-pick {
+  height: 42px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+/* Problems found on a scanned page */
+.found-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.found-list label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.found-list label.picked {
+  opacity: 1;
+  border-color: rgba(245, 196, 81, 0.45);
+}
+
+.found-list input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--gold);
+}
+
+.found-stop {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.found-list .math {
+  font-size: 1.05em;
+}
+
 /* ---------- Board ---------- */
 
 .board-stage {

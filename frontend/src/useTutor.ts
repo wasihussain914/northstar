@@ -3,6 +3,7 @@ import { checkBoard, type CheckResult } from "./api";
 import type { Marker } from "./board/Board";
 import { lineSignatures, snapshot, type Stroke } from "./board/geometry";
 import { typedTranscript } from "./board/handwriting";
+import { PHRASES, type Lang } from "./i18n";
 import { speak } from "./voice";
 
 /** How long the pen must rest before we look at the board. */
@@ -28,14 +29,14 @@ export interface Tutor {
   checkNow: () => void;
 }
 
-export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean): Tutor {
+export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean, lang: Lang = "en"): Tutor {
   const [result, setResult] = useState<CheckResult | null>(null);
   const [checkedSigs, setCheckedSigs] = useState<Map<number, string>>(new Map());
   const [inFlight, setInFlight] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const latest = useRef({ strokes, problem, voiceOn });
-  latest.current = { strokes, problem, voiceOn };
+  const latest = useRef({ strokes, problem, voiceOn, lang });
+  latest.current = { strokes, problem, voiceOn, lang };
   const busy = useRef(false);
   const again = useRef(false);
   const timer = useRef<number | undefined>(undefined);
@@ -60,7 +61,8 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean): 
     setInFlight(true);
     try {
       const transcript = typedTranscript(latest.current.strokes);
-      const res = await checkBoard(latest.current.problem, snap.image, snap.lines, transcript);
+      const res = await checkBoard(latest.current.problem, snap.image, snap.lines, transcript,
+        latest.current.lang);
       setResult(res);
       setCheckedSigs(snap.signatures);
       setFailure(null);
@@ -87,7 +89,7 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean): 
       v.hadError = true;
       if (key === v.errorKey) return;
       const drovePast = res.lines.some((l) => l.line > res.first_error! && l.status !== "skip");
-      const nudge = res.spoken_nudge || `Recalculating. Take another look at line ${res.first_error}.`;
+      const nudge = res.spoken_nudge || PHRASES[latest.current.lang].recalculating(res.first_error);
       if (drovePast) {
         v.errorKey = key;
         say(nudge);
@@ -102,11 +104,11 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean): 
     if (v.hadError) {
       v.hadError = false;
       v.errorKey = "";
-      if (!res.arrived) say("Back on route.");
+      if (!res.arrived) say(PHRASES[latest.current.lang].backOnRoute);
     }
     if (res.arrived && !v.arrived) {
       v.arrived = true;
-      say("You have arrived. Nice work.");
+      say(PHRASES[latest.current.lang].arrived);
     }
   };
 

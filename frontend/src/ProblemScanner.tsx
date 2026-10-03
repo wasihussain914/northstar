@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readProblem } from "./api";
+import { MathText } from "./MathText";
 
 /** What a successful scan hands back to the app. */
 export interface ScannedProblem {
@@ -11,6 +12,8 @@ export interface ScannedProblem {
 
 interface Props {
   onUse: (p: ScannedProblem) => void;
+  /** Several problems picked from one page: a trip with multiple stops. */
+  onTrip: (stops: { problem: string; latex: string }[], image: string) => void;
   onClose: () => void;
 }
 
@@ -33,12 +36,14 @@ type Rect = { x: number; y: number; w: number; h: number };
  * Point the camera at homework (or open a photo / PDF), drag a box around the
  * problem, and let the tutor read it. Shown as a full-screen sheet.
  */
-export function ProblemScanner({ onUse, onClose }: Props) {
+export function ProblemScanner({ onUse, onTrip, onClose }: Props) {
   const [page, setPage] = useState<Page | null>(null);
   const [pdf, setPdf] = useState<unknown>(null);
   const [crop, setCrop] = useState<Rect | null>(null);
   const [busy, setBusy] = useState<"load" | "read" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // More than one problem found in the crop: pick which ones become stops.
+  const [found, setFound] = useState<{ problems: { problem: string; latex: string }[]; selected: boolean[]; image: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
@@ -133,19 +138,30 @@ export function ProblemScanner({ onUse, onClose }: Props) {
     setBusy("read");
     setError(null);
     try {
-      const read = await readProblem(image);
-      onUse({ ...read, image });
+      const { problems } = await readProblem(image);
+      if (problems.length === 1) onUse({ ...problems[0], image });
+      else {
+        setFound({ problems, selected: problems.map(() => true), image });
+        setBusy(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setBusy(null);
     }
   };
 
+  const confirmFound = () => {
+    if (!found) return;
+    const chosen = found.problems.filter((_, i) => found.selected[i]);
+    if (chosen.length === 1) onUse({ ...chosen[0], image: found.image });
+    else if (chosen.length > 1) onTrip(chosen, found.image);
+  };
+
   return (
     <div className="scanner-backdrop" onClick={onClose}>
       <div className="scanner" role="dialog" aria-label="Scan your homework" onClick={(e) => e.stopPropagation()}>
         <header className="scanner-head">
-          <h2>{page ? "Box the problem you're solving" : "Scan your homework"}</h2>
+          <h2>{found ? "Your route for today" : page ? "Box the problem you're solving" : "Scan your homework"}</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close">
             <svg viewBox="0 0 20 20" aria-hidden="true">
               <path d="M5 5l10 10M15 5L5 15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
@@ -153,7 +169,44 @@ export function ProblemScanner({ onUse, onClose }: Props) {
           </button>
         </header>
 
-        {!page ? (
+        {found ? (
+          <>
+            <p className="scanner-note">
+              Found {found.problems.length} problems. Each one you keep becomes a stop on your trip.
+            </p>
+            <ul className="found-list">
+              {found.problems.map((p, i) => (
+                <li key={i}>
+                  <label className={found.selected[i] ? "picked" : ""}>
+                    <input
+                      type="checkbox"
+                      checked={found.selected[i]}
+                      onChange={() =>
+                        setFound({ ...found, selected: found.selected.map((s, j) => (j === i ? !s : s)) })
+                      }
+                    />
+                    <span className="found-stop">{i + 1}</span>
+                    <MathText latex={p.latex || p.problem} />
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <footer className="scanner-foot">
+              <button className="btn ghost" onClick={() => setFound(null)}>
+                Back
+              </button>
+              <button
+                className="btn primary"
+                disabled={!found.selected.some(Boolean)}
+                onClick={confirmFound}
+              >
+                {found.selected.filter(Boolean).length > 1
+                  ? `Start trip · ${found.selected.filter(Boolean).length} stops`
+                  : "Use this problem"}
+              </button>
+            </footer>
+          </>
+        ) : !page ? (
           <div className="scanner-pick">
             <button className="pick-tile" onClick={() => cameraRef.current?.click()}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
