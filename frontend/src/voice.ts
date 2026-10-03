@@ -100,7 +100,7 @@ export function speak(text: string) {
   fetch("/api/speak", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, lang: locale.slice(0, 2) }),
   })
     .then(async (res) => {
       if (!res.ok) {

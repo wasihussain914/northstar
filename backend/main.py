@@ -255,15 +255,16 @@ async def problem(req: ProblemRequest) -> dict:
 
 class SpeakRequest(BaseModel):
     text: str = Field(min_length=1, max_length=600)
+    lang: str = Field(default="en", max_length=8)
 
 
 @app.post("/api/speak")
 async def speak(req: SpeakRequest) -> Response:
     """The GPS voice as neural audio. 503 when no TTS key: use browser speech."""
     if not tts.enabled():
-        raise HTTPException(503, "No ELEVENLABS_API_KEY on the server; use browser speech.")
+        raise HTTPException(503, "No XAI_API_KEY or ELEVENLABS_API_KEY on the server; use browser speech.")
     try:
-        audio = await tts.speak(req.text)
+        audio = await tts.speak(req.text, req.lang)
     except Exception as exc:
         raise HTTPException(502, f"Text-to-speech failed: {exc}")
     return Response(content=audio, media_type="audio/mpeg")
