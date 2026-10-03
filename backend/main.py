@@ -176,20 +176,35 @@ async def check(req: CheckRequest) -> dict:
         DEBUG_DIR.mkdir(exist_ok=True)
         (DEBUG_DIR / f"{stamp}.png").write_bytes(raw)
 
+    def line_steps(b: dict) -> list[tuple[int, str]]:
+        return [(l["line"], l["sympy"]) for l in sorted(b["lines"], key=lambda l: l["line"])
+                if l["kind"] not in SKIP_KINDS and l["kind"] != "incomplete"]
+
     started = time.perf_counter()
-    try:
-        if FAKE_VISION:
-            board = await fake_tutor.read_board(req.problem, req.transcript, req.lines, req.lang)
-        else:
-            board = await tutor.read_board(req.problem, image, req.lines, req.transcript, req.lang)
-    except tutor.TutorError as exc:
-        raise HTTPException(502, str(exc))
+    board = sym = None
+
+    # Fast path: every line was typed, so the text is exact and a model read
+    # adds nothing. SymPy alone turns a check into milliseconds; if it can't
+    # decide a single line, fall through to the full model read below.
+    if not FAKE_VISION and req.transcript and req.lines and all(n in req.transcript for n in req.lines):
+        candidate = fake_tutor.transcript_board(req.problem, req.transcript, req.lines)
+        verdict_check = await sympy_pool.check(candidate.get("problem_sympy", ""), line_steps(candidate),
+                                               candidate.get("target_variable", ""), candidate.get("task") or "")
+        if verdict_check and any(r["verdict"] != "unknown" for r in verdict_check["results"].values()):
+            board, sym = candidate, verdict_check
+
+    if board is None:
+        try:
+            if FAKE_VISION:
+                board = await fake_tutor.read_board(req.problem, req.transcript, req.lines, req.lang)
+            else:
+                board = await tutor.read_board(req.problem, image, req.lines, req.transcript, req.lang)
+        except tutor.TutorError as exc:
+            raise HTTPException(502, str(exc))
+        sym = await sympy_pool.check(board.get("problem_sympy", ""), line_steps(board),
+                                     board.get("target_variable", ""), board.get("task") or "")
     read_ms = (time.perf_counter() - started) * 1000
 
-    steps = [(l["line"], l["sympy"]) for l in sorted(board["lines"], key=lambda l: l["line"])
-             if l["kind"] not in SKIP_KINDS and l["kind"] != "incomplete"]
-    sym = await sympy_pool.check(board.get("problem_sympy", ""), steps, board.get("target_variable", ""),
-                                 board.get("task") or "")
     lines = merge(board, sym)
 
     first_error = next((l["line"] for l in lines if l["status"] == "error"), None)

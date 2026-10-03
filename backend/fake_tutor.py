@@ -51,10 +51,12 @@ def _kind(text: str) -> str:
     return "equation" if "=" in text else "expression"
 
 
-async def read_board(problem: str, transcript: dict[int, str] | None, lines: list[int],
-                     lang: str = "en") -> dict:
-    if not transcript:
-        raise TutorError("Fake vision mode only reads lines written with northstar.write().")
+def transcript_board(problem: str, transcript: dict[int, str], lines: list[int]) -> dict:
+    """A board built from typed text alone — no vision call needed.
+
+    Used by fake mode, and by the production fast path when every line on the
+    board was typed (the text is exact, so a model read adds nothing).
+    """
     math = _problem_math(problem)
     letters = sorted(set(re.findall(r"[a-z]", math)))
     target = letters[0] if len(letters) == 1 and re.search(r"[=<>]", math) else ""
@@ -71,6 +73,13 @@ async def read_board(problem: str, transcript: dict[int, str] | None, lines: lis
         "eta_steps": 2,
         "route_note": "",
     }
+
+
+async def read_board(problem: str, transcript: dict[int, str] | None, lines: list[int],
+                     lang: str = "en") -> dict:
+    if not transcript:
+        raise TutorError("Fake vision mode only reads lines written with northstar.write().")
+    return transcript_board(problem, transcript, lines)
 
 
 async def check_plan(problem: str, plan: str, lang: str = "en") -> dict:
