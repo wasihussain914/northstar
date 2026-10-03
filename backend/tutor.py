@@ -1,10 +1,10 @@
 """Claude reads the board and writes the guidance.
 
 Two calls:
-  read_board()    - vision: transcribe every numbered line, judge it, and
-                    draft hints for the first wrong turn it sees.
-  explain_line()  - text only: when SymPy finds a different first error than
-                    Claude did, write hints for the line SymPy flagged.
+  read_board()    - vision: transcribe every numbered line and judge it. Kept
+                    small so the common no-error check stays fast.
+  explain_line()  - text only: write the hint ladder for the first wrong turn,
+                    whoever found it (SymPy or read_board's verdicts).
 """
 
 from __future__ import annotations
@@ -54,12 +54,6 @@ ok, error, or unclear. A line that correctly carries forward an earlier mistake 
 mistake is made is an error.
 
 Then guide the student:
-- first_error_line: the first line marked error, or 0 if none.
-- hints: exactly three hints for that line, from gentle to specific. Hint 1 points at where to look and asks a \
-question. Hint 2 names the rule or idea that was misapplied. Hint 3 shows the corrected version of that one line \
-only. Never state the final answer. Empty strings if there is no error.
-- spoken_nudge: one short sentence (under 15 words) a GPS voice could say about the wrong turn, e.g. \
-"Recalculating. Take another look at the sign in line 3." Empty if no error.
 - next_step_hint: if the work so far is correct but unfinished, a Socratic nudge toward the next move, without \
 doing it. Empty if finished or if there is an error.
 - on_track_message: a few warm words of encouragement that fit where they are.
@@ -97,15 +91,12 @@ BOARD_SCHEMA: dict[str, Any] = {
                 "additionalProperties": False,
             },
         },
-        "first_error_line": {"type": "integer"},
-        "hints": {"type": "array", "items": {"type": "string"}},
-        "spoken_nudge": {"type": "string"},
         "next_step_hint": {"type": "string"},
         "on_track_message": {"type": "string"},
         "eta_steps": {"type": "integer"},
         "route_note": {"type": "string"},
     },
-    "required": ["problem_sympy", "target_variable", "lines", "first_error_line", "hints", "spoken_nudge",
+    "required": ["problem_sympy", "target_variable", "lines",
                  "next_step_hint", "on_track_message", "eta_steps", "route_note"],
     "additionalProperties": False,
 }
@@ -218,11 +209,16 @@ async def ask(problem: str, question: str, image_png_b64: str | None, transcript
     return {"answer": answer}
 
 
+HINT_RULES = """Write exactly three hints for that line, from gentle to specific. Hint 1 points at where to \
+look and asks a question. Hint 2 names the rule or idea that was misapplied. Hint 3 shows the corrected version \
+of that one line only. Never state the final answer or any solution values, in any hint.
+Also write spoken_nudge: one short sentence (under 15 words) a GPS voice could say about the wrong turn, e.g. \
+"Recalculating. Take another look at the sign in line 3.\""""
+
+
 async def explain_line(problem: str, lines: list[dict], line: int, detail: str, note: str = "") -> dict:
     work = "\n".join(f"line {l['line']}: {l['latex']}" for l in lines if l.get("latex"))
     prompt = (f"Problem: {problem}\n\nThe student's work so far:\n{work}\n\n"
-              f"A symbolic algebra check found that line {line} does not follow from the line before it"
-              f"{' (for you only: ' + detail + ')' if detail else ''}.\n"
-              f"Write the three hints and the spoken_nudge for line {line}, following the same rules as before. "
-              f"Do not reveal the final answer or any solution values.")
+              f"Line {line} is the first wrong turn: it does not follow from the line before it"
+              f"{' (for you only: ' + detail + ')' if detail else ''}.\n{HINT_RULES}")
     return await _structured(prompt, EXPLAIN_SCHEMA, max_tokens=4000)

@@ -13,17 +13,20 @@ Built for Cornell Hacks 2026 (theme: **Navigation**).
                                    │
                                    ▼
                      Claude Sonnet 5.5 (vision) reads each line 
-                     → LaTeX + SymPy syntax + hints
+                     → LaTeX + SymPy syntax
                                    │
                                    ▼
                      SymPy checks each step against the one before
                      (equivalent? lost a root? flipped inequality?)
                                    │
+                     wrong turn? → a second, smaller Claude call
+                                   writes the hint ladder
                                    ▼
           gutter markers ✓ 📍 ⚠ · route panel · GPS voice · hint ladder
 ```
 
-- **Claude reads, SymPy proves.** Claude transcribes the handwriting and writes the hints. Whether a step is
+- **Claude reads, SymPy proves.** Claude transcribes the handwriting; when a step is wrong, a second, smaller
+  Claude call writes the hints. Whether a step is
   correct is decided by SymPy where it can: for equations it compares solution sets, for expressions it checks
   that they're equal. Steps SymPy can't decide fall back to Claude's judgment and are labeled "AI-checked"
   instead of "verified".

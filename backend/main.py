@@ -159,9 +159,10 @@ async def check(req: CheckRequest) -> dict:
     lines = merge(board, sym)
 
     first_error = next((l["line"] for l in lines if l["status"] == "error"), None)
-    hints, spoken = board.get("hints", []), board.get("spoken_nudge", "")
-    if first_error is not None and first_error != board.get("first_error_line"):
-        # SymPy caught a wrong turn Claude didn't; get hints for that line.
+    hints, spoken = [], ""
+    if first_error is not None:
+        # Hints are a second, text-only call, made only when there is a wrong
+        # turn — the common no-error check pays for transcription alone.
         flagged = next(l for l in lines if l["line"] == first_error)
         try:
             explained = await (fake_tutor if FAKE_VISION else tutor).explain_line(
@@ -171,8 +172,6 @@ async def check(req: CheckRequest) -> dict:
             hints = [f"Take another look at line {first_error}. Does it really follow from the line above?",
                      flagged["detail"] or "Compare it carefully with the previous line.", ""]
             spoken = f"Recalculating. Take another look at line {first_error}."
-    if first_error is None:
-        hints, spoken = [], ""
 
     has_work = any(l["status"] not in ("skip", "pending") for l in lines)
     arrived = first_error is None and has_work and (
