@@ -1,0 +1,265 @@
+/* Handwriting Glyph Renderer styles — isolated so the main app is unaffected */
+
+.glyphs-root {
+  min-height: 100vh;
+  background: #f5f4ef;
+  color: #1a1a1a;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+}
+
+.glyphs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  background: #fff;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.glyphs-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.back-link {
+  color: #555;
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.glyphs-main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Controls */
+.glyph-controls {
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.control-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-end;
+}
+
+.control-label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-weight: 500;
+  font-size: 13px;
+  color: #444;
+}
+
+.control-label .val {
+  font-weight: 400;
+  color: #888;
+}
+
+.file-input {
+  margin-top: 4px;
+}
+
+.text-input {
+  padding: 7px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 16px;
+  width: 340px;
+}
+
+.seed-input {
+  padding: 7px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+  width: 100px;
+}
+
+.sliders {
+  gap: 24px;
+}
+
+.sliders input[type="range"] {
+  width: 180px;
+}
+
+.buttons {
+  gap: 10px;
+}
+
+.glyph-btn {
+  padding: 7px 14px;
+  background: #1a1a1a;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+
+.glyph-btn:hover {
+  background: #333;
+}
+
+.glyph-btn.active {
+  background: #2563eb;
+}
+
+/* Canvas */
+.no-dataset {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+  font-size: 15px;
+}
+
+.renderer-canvas-wrap {
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.canvas-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: #fbfaf6;
+}
+
+.canvas-scroll canvas {
+  display: block;
+}
+
+.canvas-actions {
+  display: flex;
+  gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid #eee;
+  background: #fff;
+}
+
+/* Bottom panels */
+.glyphs-bottom {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+/* Debug panel */
+.debug-panel {
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  padding: 18px 22px;
+  min-width: 280px;
+  flex: 1;
+}
+
+.debug-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+.debug-panel p {
+  margin: 4px 0;
+}
+
+.debug-panel .muted {
+  color: #888;
+}
+
+.label-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.label-chip {
+  padding: 3px 8px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: monospace;
+  transition: background 0.1s;
+}
+
+.label-chip:hover {
+  background: #e0e0e0;
+}
+
+.label-chip.active {
+  background: #1a1a1a;
+  color: #fff;
+  border-color: #1a1a1a;
+}
+
+.missing-panel {
+  margin-top: 12px;
+  padding: 10px;
+  background: #fff8ee;
+  border: 1px solid #f5c96a;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.missing-chip {
+  background: #fef3c7;
+  border: 1px solid #f5c96a;
+  border-radius: 3px;
+  padding: 2px 6px;
+  margin-left: 4px;
+  font-size: 13px;
+}
+
+/* Glyph preview */
+.glyph-preview-panel {
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  padding: 18px 22px;
+  flex: 2;
+  min-width: 320px;
+}
+
+.glyph-preview-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+.glyph-preview-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.glyph-cell {
+  display: block;
+  border-radius: 4px;
+}
