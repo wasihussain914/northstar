@@ -22,8 +22,8 @@ from pathlib import Path
 # Rachel: calm and even, the closest ElevenLabs stock voice to a nav system.
 VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
 MODEL_ID = os.environ.get("ELEVENLABS_MODEL", "eleven_flash_v2_5")
-# Eve: xAI's default expressive voice.
-GROK_VOICE = os.environ.get("NORTHSTAR_TTS_VOICE", "eve")
+# Gork: the team's pick for the GPS voice.
+GROK_VOICE = os.environ.get("NORTHSTAR_TTS_VOICE", "gork")
 CACHE = Path(__file__).with_name("tts_cache")
 
 

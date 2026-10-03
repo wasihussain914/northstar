@@ -66,4 +66,4 @@ def test_grok_request_shape(monkeypatch):
     monkeypatch.setattr(tts, "_post", fake_post)
     assert tts._fetch("Recalculating.", "es") == b"audio"
     assert seen["url"].endswith("/v1/tts")
-    assert seen["voice_id"] == "eve" and seen["language"] == "es"
+    assert seen["voice_id"] == "gork" and seen["language"] == "es"
