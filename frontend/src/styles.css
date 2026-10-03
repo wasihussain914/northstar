@@ -2376,8 +2376,34 @@ canvas.ink.tool-eraser {
 
 /* When the route drawer slides over the board, Pip hops out to stand just
    left of it, above the dimmed backdrop, so his reaction to a wrong turn
-   stays visible. Phones have no room beside a near-full-width drawer, so he
-   stays put there. (The drawer floats 16px in from the right edge.) */
+   stays visible. (The drawer floats 16px in from the right edge.) On phones
+   the drawer is nearly full-screen, so instead he perches small on its
+   top-left corner, over the brand mark, with his bubble opening rightward. */
+@media (max-width: 699px) {
+  .pip.beside-drawer {
+    position: fixed;
+    top: calc(84px + 8px + env(safe-area-inset-top));
+    left: calc(16px + 12px + env(safe-area-inset-left));
+    right: auto;
+    bottom: auto;
+    width: 52px;
+    z-index: 32;
+    animation: pip-step-aside 0.35s cubic-bezier(0.3, 1.4, 0.6, 1);
+  }
+  .pip.beside-drawer .pip-bubble {
+    left: calc(100% + 6px);
+    right: auto;
+    top: 4px;
+    bottom: auto;
+    max-width: min(240px, calc(100vw - 120px));
+    border-radius: 4px 16px 16px 16px;
+    transform-origin: 0 0;
+  }
+  .pip.beside-drawer .pip-hide {
+    display: none;
+  }
+}
+
 @media (min-width: 700px) {
   .pip.beside-drawer {
     position: fixed;
