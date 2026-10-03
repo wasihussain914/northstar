@@ -2182,3 +2182,22 @@ canvas.ink.tool-eraser {
   40% { transform: translateY(-16px) rotate(-4deg); }
   100% { transform: translateY(0); }
 }
+
+/* When the route drawer slides over the board (below the docked-sidebar
+   breakpoint), Pip hops out to stand just left of it, above the dimmed
+   backdrop, so his reaction to a wrong turn stays visible. Phones have no
+   room beside a near-full-width drawer, so he stays put there. */
+@media (min-width: 700px) and (max-width: 1439px) {
+  .pip.beside-drawer {
+    position: fixed;
+    right: calc(min(400px, 94vw) + 12px);
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    z-index: 32;
+    animation: pip-step-aside 0.35s cubic-bezier(0.3, 1.4, 0.6, 1);
+  }
+}
+
+@keyframes pip-step-aside {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}

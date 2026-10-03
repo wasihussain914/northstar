@@ -43,7 +43,12 @@ function writeHidden(hidden: boolean) {
   }
 }
 
-export function Mascot({ mood, voiceOn }: { mood: PipMood; voiceOn: boolean }) {
+export function Mascot({ mood, voiceOn, besideDrawer = false }: {
+  mood: PipMood;
+  voiceOn: boolean;
+  /** The route drawer is sliding over the board: step out of its way. */
+  besideDrawer?: boolean;
+}) {
   const [talking, setTalking] = useState(false);
   const [bubble, setBubble] = useState("");
   const [hop, setHop] = useState(0);
@@ -91,7 +96,7 @@ export function Mascot({ mood, voiceOn }: { mood: PipMood; voiceOn: boolean }) {
   }
 
   return (
-    <div className={`pip mood-${mood}${talking ? " talking" : ""}`}>
+    <div className={`pip mood-${mood}${talking ? " talking" : ""}${besideDrawer ? " beside-drawer" : ""}`}>
       <div className={`pip-bubble${bubble ? " show" : ""}`} aria-live="polite">
         {bubble}
       </div>

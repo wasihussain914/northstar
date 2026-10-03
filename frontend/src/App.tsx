@@ -391,7 +391,7 @@ export default function App() {
             <StatusPill tutor={tutor} arrived={arrived} onTap={() => setPanelOpen(true)} />
             <RecalcBanner errorKey={tutor.errorKey} line={tutor.errorLine} />
             <Starburst fireKey={arrived ? problem : ""} />
-            <Mascot mood={pipMood(tutor, arrived)} voiceOn={voiceOn} />
+            <Mascot mood={pipMood(tutor, arrived)} voiceOn={voiceOn} besideDrawer={panelOpen} />
             {strokes.length === 0 && !planDismissed && !demoRunning && (
               <PlanCard
                 key={problem}
