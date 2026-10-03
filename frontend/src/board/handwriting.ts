@@ -13,16 +13,16 @@ export function typedTranscript(strokes: Stroke[]): Record<number, string> | und
   return Object.keys(out).length ? out : undefined;
 }
 
-const FONT = '46px "Bradley Hand", "Noteworthy", "Chalkboard SE", "Comic Sans MS", cursive';
+const FONT_FAMILY = '"Bradley Hand", "Noteworthy", "Chalkboard SE", "Comic Sans MS", cursive';
 
 /**
  * Turn typed text into ink strokes on a ruled line, in a handwriting font.
  * Used for typed steps (no stylus needed) and the demo autopilot. The text is
  * remembered so the server gets it verbatim instead of reading it back.
  */
-export function textToStrokes(text: string, line: number, x0 = 28): Stroke[] {
+export function textToStrokes(text: string, line: number, x0 = 28, fontPx = 46, remember = true): Stroke[] {
   const probe = document.createElement("canvas").getContext("2d")!;
-  probe.font = FONT;
+  probe.font = `${fontPx}px ${FONT_FAMILY}`;
   const w = Math.ceil(probe.measureText(text).width) + 8;
   const h = LINE_H;
 
@@ -30,7 +30,7 @@ export function textToStrokes(text: string, line: number, x0 = 28): Stroke[] {
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-  ctx.font = FONT;
+  ctx.font = `${fontPx}px ${FONT_FAMILY}`;
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "#000";
   ctx.fillText(text, 2, Math.round(h * 0.66));
@@ -50,6 +50,24 @@ export function textToStrokes(text: string, line: number, x0 = 28): Stroke[] {
       }
     }
   }
-  if (strokes.length) typed.set(strokes[0], text);
+  if (remember && strokes.length) typed.set(strokes[0], text);
   return strokes;
+}
+
+/**
+ * Handwriting for the question band above line 1. Not student work: the caller
+ * draws these itself and leaves them out of the strokes sent to the tutor.
+ * Shrinks until the line fits `maxWidth`.
+ */
+export function questionStrokes(text: string, maxWidth: number): Stroke[] {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean) return [];
+  const shown = clean.length > 96 ? `${clean.slice(0, 93)}…` : clean;
+  for (const fontPx of [40, 32, 26, 20]) {
+    const strokes = textToStrokes(shown, 1, 20, fontPx, false);
+    if (!strokes.length) return [];
+    const maxX = Math.max(...strokes.map((s) => s.box.maxX));
+    if (maxX <= maxWidth) return strokes;
+  }
+  return textToStrokes(shown, 1, 20, 20, false);
 }

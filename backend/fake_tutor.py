@@ -51,10 +51,12 @@ def _kind(text: str) -> str:
     return "equation" if "=" in text else "expression"
 
 
-async def read_board(problem: str, transcript: dict[int, str] | None, lines: list[int],
-                     lang: str = "en") -> dict:
-    if not transcript:
-        raise TutorError("Fake vision mode only reads lines written with northstar.write().")
+def transcript_board(problem: str, transcript: dict[int, str], lines: list[int]) -> dict:
+    """A board built from typed text alone — no vision call needed.
+
+    Used by fake mode, and by the production fast path when every line on the
+    board was typed (the text is exact, so a model read adds nothing).
+    """
     math = _problem_math(problem)
     letters = sorted(set(re.findall(r"[a-z]", math)))
     target = letters[0] if len(letters) == 1 and re.search(r"[=<>]", math) else ""
@@ -71,6 +73,32 @@ async def read_board(problem: str, transcript: dict[int, str] | None, lines: lis
         "eta_steps": 2,
         "route_note": "",
     }
+
+
+async def read_board(problem: str, transcript: dict[int, str] | None, lines: list[int],
+                     lang: str = "en") -> dict:
+    if not transcript:
+        raise TutorError("Fake vision mode only reads lines written with northstar.write().")
+    return transcript_board(problem, transcript, lines)
+
+
+async def check_plan(problem: str, plan: str, lang: str = "en") -> dict:
+    # Keyword-judged so the plan flow can be tested free.
+    text = plan.lower()
+    if any(w in text for w in ("distribute", "expand", "multiply out")):
+        return {"verdict": "good", "feedback": "That route gets you there. Drive it.",
+                "spoken": "That route gets you there. Drive it."}
+    if any(w in text for w in ("combine", "isolate", "both sides", "divide")):
+        return {"verdict": "partial", "feedback": "Right direction. What has to happen to the parentheses first?",
+                "spoken": "Right direction. What has to happen to the parentheses first?"}
+    return {"verdict": "off", "feedback": "That route won't reach it. Look at the parentheses: what undoes them?",
+            "spoken": "That route won't reach it. Look at the parentheses. What undoes them?"}
+
+
+async def practice_problem(problem: str, wrong_latex: str, note: str, lang: str = "en") -> dict:
+    # A fixed twin of the flagship demo problem, so the detour flow tests free.
+    return {"problem": "Solve 3(x - 2) + 5 = 14", "latex": "3(x - 2) + 5 = 14",
+            "skill": "distribute, then combine"}
 
 
 async def read_problem(image_png_b64: str) -> dict:

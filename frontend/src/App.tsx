@@ -2,11 +2,12 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { health } from "./api";
 import { Board, type TeacherInk, type Tool } from "./board/Board";
 import { LINES, lineOf, type Stroke } from "./board/geometry";
-import { textToStrokes } from "./board/handwriting";
+// import { textToStrokes } from "./board/handwriting"; // superseded by vector glyph renderer
 import { AskCard } from "./AskCard";
 import { DEMOS, runDemo } from "./demo";
 import { DestinationCard } from "./DestinationCard";
 import { RecalcBanner, Starburst } from "./Flashes";
+import { PlanCard } from "./PlanCard";
 import { ProblemScanner, type ScannedProblem } from "./ProblemScanner";
 import { RoutePanel } from "./RoutePanel";
 import { TypeBar } from "./TypeBar";
@@ -14,7 +15,9 @@ import { UntangledMark } from "./Logo";
 import { LANGUAGES, speechLocale, type Lang } from "./i18n";
 import { useTrip } from "./useTrip";
 import { useTutor } from "./useTutor";
-import { setSpeechLang, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
+import { loadDataset } from "./glyphs/lib/loadDataset";
+import type { GlyphLibrary } from "./glyphs/types/handwriting";
+import { setServerTts, setSpeechLang, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
 
 const PRESETS = [
   "Solve 2(x − 3) + 4 = 10",
@@ -120,6 +123,29 @@ export default function App() {
   // The glass panel floats over the page on the left. Open by default where there's room for it.
   const [panelOpen, setPanelOpen] = useState(() => window.innerWidth >= 1100);
 
+  const [glyphLibrary, setGlyphLibrary] = useState<GlyphLibrary | null>(null);
+
+  // Auto-load the handwriting dataset from the backend on startup
+  useEffect(() => {
+    fetch("/api/samples")
+      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+      .then((json) => setGlyphLibrary(loadDataset(json)))
+      .catch(() => { /* backend not running yet or no samples — silent */ });
+  }, []);
+
+  const handleGlyphFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const json = JSON.parse(ev.target?.result as string);
+        setGlyphLibrary(loadDataset(json));
+      } catch { /* ignore bad files */ }
+    };
+    reader.readAsText(file);
+  };
+
   const tutor = useTutor(strokes, problem, voiceOn, lang);
   const { trip, countHint } = useTrip(strokes, tutor);
 
@@ -153,6 +179,9 @@ export default function App() {
   // Like a GPS, surface the detail when something needs attention:
   // a wrong turn opens the drawer (hints live there), and so does arriving.
   const arrived = !!tutor.result?.arrived && tutor.phase === "ready";
+
+  // Route preview: ask for the whole plan while the paper is still blank.
+  const [planDismissed, setPlanDismissed] = useState(false);
   useEffect(() => {
     if (tutor.errorLine != null) setPanelOpen(true);
   }, [tutor.errorLine != null && tutor.errorKey]);
@@ -161,7 +190,10 @@ export default function App() {
   }, [arrived]);
 
   useEffect(() => {
-    health().then((h) => setHasKey(h ? h.has_key : null));
+    health().then((h) => {
+      setHasKey(h ? h.has_key : null);
+      setServerTts(!!h?.tts);
+    });
   }, []);
 
   // Dev helper: window.northstar.write(2, "2x - 6 + 4 = 10") writes a line in a handwriting font.
@@ -170,7 +202,9 @@ export default function App() {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     (window as unknown as { northstar: object }).northstar = {
-      write: (line: number, text: string) => dispatch({ type: "addMany", strokes: textToStrokes(text, line) }),
+      write: (line: number, text: string) => {
+        void line; void text; // textToStrokes removed — use the glyph renderer at #glyphs
+      },
       erase: (line: number) =>
         dispatch({ type: "erase", ids: strokesRef.current.filter((s) => lineOf(s) === line).map((s) => s.id) }),
       clear: () => dispatch({ type: "clear" }),
@@ -211,6 +245,7 @@ export default function App() {
   const newProblem = (p: string, s: { latex: string; image: string | null } | null = null) => {
     setProblem(p);
     setScan(s);
+    setPlanDismissed(false);
     dispatch({ type: "clear" });
     setSelectedLine(null);
     setPanelOpen(false);
@@ -266,11 +301,12 @@ export default function App() {
   const usedLines = new Set(strokes.map(lineOf));
   const lastUsed = usedLines.size ? Math.max(...usedLines) : 0;
   const typeTarget = selectedLine ?? (lastUsed < LINES ? lastUsed + 1 : null);
-  const typeStep = (text: string) => {
+  const typeStep = (_text: string) => {
     if (typeTarget == null) return;
     unlockSpeech();
     stopDemo();
-    dispatch({ type: "replaceLine", line: typeTarget, strokes: textToStrokes(text, typeTarget) });
+    // textToStrokes removed — typed steps no longer rasterise a font
+    // dispatch({ type: "replaceLine", line: typeTarget, strokes: textToStrokes(text, typeTarget) });
     setSelectedLine(null);
   };
 
@@ -405,16 +441,28 @@ export default function App() {
             }}
             status={<StatusPill tutor={tutor} arrived={arrived} onTap={() => setPanelOpen(true)} />}
           />
+          {strokes.length === 0 && !planDismissed && !demoRunning && (
+            <PlanCard
+              key={problem}
+              problem={problem}
+              lang={lang}
+              voiceOn={voiceOn}
+              onClose={() => setPlanDismissed(true)}
+            />
+          )}
           <div className="board-stage">
             <RecalcBanner errorKey={tutor.errorKey} line={tutor.errorLine} />
             <Starburst fireKey={arrived ? problem : ""} />
             <Board
               strokes={strokes}
+              problem={problem}
+              promptStart={tutor.phase === "empty"}
               tool={tool}
               markers={tutor.markers}
               errorLine={tutor.errorLine}
               selectedLine={selectedLine}
               teacherInk={teacherInk}
+              glyphLibrary={glyphLibrary}
               onAdd={(stroke) => dispatch({ type: "add", stroke })}
               onErase={(ids) => dispatch({ type: "erase", ids })}
               onSelectLine={onSelectLine}
@@ -477,6 +525,13 @@ export default function App() {
             </section>
 
             <section className="panel-section settings">
+              <label
+                className="chip glyph-load"
+                title={glyphLibrary ? `Handwriting loaded (${glyphLibrary.byLabel.size} glyphs). Tap to load another.` : "Load a handwriting dataset"}
+              >
+                {glyphLibrary ? `Handwriting · ${glyphLibrary.byLabel.size}` : "Load handwriting"}
+                <input type="file" accept=".json" onChange={handleGlyphFile} hidden />
+              </label>
               {speechSupported && (
                 <button className={`chip${voiceOn ? " active" : ""}`} onClick={toggleVoice} aria-pressed={voiceOn}>
                   {voiceOn ? "Voice on" : "Voice off"}
@@ -529,6 +584,7 @@ function StatusPill({ tutor, arrived, onTap }: {
     : tone === "off" ? `Take another look at line ${tutor.errorLine}`
     : tone === "arrived" ? "Solved"
     : tone === "on" ? (tutor.result!.eta_steps > 0 ? `Looks right · about ${tutor.result!.eta_steps} more` : "Looks right so far")
+    : tutor.phase === "empty" ? "Start on line 1"
     : "Write one step per line";
   return (
     <button className={`status-pill tone-${tone}`} onClick={onTap} title="Show the route">

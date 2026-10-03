@@ -9,11 +9,12 @@ import tutor
 
 
 def test_schemas_require_margin_ink() -> None:
-    assert "hint_ink" in tutor.BOARD_SCHEMA["required"]
+    # Since the split into read_board + explain_line, next_step_ink rides the
+    # board call and hint_ink rides the hint call.
     assert "next_step_ink" in tutor.BOARD_SCHEMA["required"]
-    assert "hint_ink" in tutor.EXPLAIN_SCHEMA["required"]
-    assert "jot in red" in tutor.SYSTEM
     assert "next_step_ink" in tutor.SYSTEM
+    assert "hint_ink" in tutor.EXPLAIN_SCHEMA["required"]
+    assert "jot in red" in tutor.HINT_RULES
 
 
 def test_fake_tutor_writes_short_margin_notes() -> None:

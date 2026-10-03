@@ -30,6 +30,12 @@
   --row-selected: rgba(255, 255, 255, 0.05);
   --row-error: rgba(255, 162, 76, 0.1);
   --eraser: rgba(255, 255, 255, 0.5);
+  --q-band-bg: rgba(255, 255, 255, 0.03);
+  --rule-strong: rgba(255, 255, 255, 0.16);
+  --row-prompt: rgba(207, 248, 250, 0.05);
+  --prompt-bar: #cff8fa;
+  --prompt-text: rgba(237, 237, 237, 0.32);
+  --teacher: #ff6a5a;
   --text: #ededed;
   --muted: #c2c2c2;
   --faint: #8a8a8a;
@@ -84,6 +90,12 @@
   --row-selected: rgba(0, 0, 0, 0.04);
   --row-error: rgba(255, 162, 76, 0.16);
   --eraser: rgba(0, 0, 0, 0.45);
+  --q-band-bg: rgba(0, 0, 0, 0.025);
+  --rule-strong: rgba(0, 0, 0, 0.14);
+  --row-prompt: rgba(19, 138, 147, 0.06);
+  --prompt-bar: #138a93;
+  --prompt-text: rgba(22, 22, 22, 0.32);
+  --teacher: #c62828;
   color-scheme: light;
 }
 
@@ -1139,7 +1151,7 @@ canvas.ink.tool-eraser {
 }
 
 .eyebrow.gold {
-  color: var(--cobalt-text);
+  color: var(--text);
 }
 
 .status {
@@ -1875,3 +1887,118 @@ canvas.ink.tool-eraser {
   font-size: 14px;
 }
 
+/* ---------- The question row and the first-step prompt ---------- */
+
+.gutter-question {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--slate);
+}
+
+.gutter-row.prompt {
+  background: var(--row-prompt);
+}
+
+/* ---------- Plan your route (above the paper, never over it) ---------- */
+
+.plan-card {
+  position: relative;
+  flex-shrink: 0;
+  padding: 18px 20px;
+  border-radius: 24px;
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  box-shadow: inset 0 0 0 1px var(--glass-edge);
+  animation: rise 0.3s ease-out;
+}
+
+.plan-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  color: var(--muted);
+}
+
+.plan-ask {
+  margin: 0 40px 14px 0;
+  font-family: var(--display);
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.plan-feedback {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--sunken);
+  animation: rise 0.25s ease-out;
+}
+
+.plan-feedback.verdict-good {
+  box-shadow: inset 0 0 0 1.5px var(--step);
+}
+
+.plan-feedback.verdict-partial {
+  box-shadow: inset 0 0 0 1.5px #cff8fa;
+}
+
+.plan-feedback.verdict-off {
+  box-shadow: inset 0 0 0 1.5px var(--amber);
+}
+
+.plan-go {
+  margin-top: 10px;
+}
+
+/* ---------- Practice: a twin problem for the skill you slipped on ---------- */
+
+.practice {
+  padding: 18px;
+  border-radius: 24px;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--glass-edge);
+}
+
+.practice-lead {
+  margin: 0 0 10px;
+  color: var(--muted);
+}
+
+.skill-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  margin-bottom: 10px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  box-shadow: inset 0 0 0 1.5px #cff8fa;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.practice-problem {
+  margin: 0 0 14px;
+  font-family: var(--display);
+  font-size: 19px;
+  font-weight: 500;
+}
+
+.practice-error {
+  margin: 8px 0 0;
+  color: var(--red);
+  font-size: 13px;
+}
+
+
+.glyph-load {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}

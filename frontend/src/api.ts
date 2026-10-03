@@ -69,12 +69,22 @@ export function askTutor(req: {
   return post<{ answer: string }>("/api/ask", req);
 }
 
+/** Route preview: judge the student's plan for the whole problem. */
+export function checkPlan(req: { problem: string; plan: string; lang?: string }) {
+  return post<{ verdict: "good" | "partial" | "off"; feedback: string; spoken: string }>("/api/plan", req);
+}
+
+/** One fresh problem exercising the skill the student just got wrong. */
+export function practiceProblem(req: { problem: string; wrong_line: string; note: string; lang?: string }) {
+  return post<{ problem: string; latex: string; skill: string }>("/api/practice", req);
+}
+
 /** Read the problem(s) off a cropped photo of homework. */
 export function readProblem(image: string) {
   return post<{ problems: { problem: string; latex: string }[] }>("/api/problem", { image });
 }
 
-export async function health(): Promise<{ ok: boolean; has_key: boolean; fake?: boolean } | null> {
+export async function health(): Promise<{ ok: boolean; has_key: boolean; tts?: boolean; fake?: boolean } | null> {
   try {
     const res = await fetch(`${API_BASE}/api/health`);
     return res.ok ? res.json() : null;

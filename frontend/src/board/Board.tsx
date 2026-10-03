@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LineStatus } from "../api";
 import {
   BOARD_H,
@@ -6,14 +6,19 @@ import {
   LINES,
   MIN_BOARD_W,
   hitStrokes,
+  lineOf,
   makeStroke,
   outlinePath,
   strokePath,
   type Point,
   type Stroke,
 } from "./geometry";
-import { buildTeacherAnim, drawTeacherAnim, type TeacherAnim } from "./teacherPen";
+import { questionStrokes } from "./handwriting";
 import { createInkContacts, notePointerDown, notePointerMove, notePointerUp } from "./palm";
+import { layoutText, type GlyphLayout } from "../glyphs/lib/renderText";
+import { drawGlyph, drawGlyphPartialStroke } from "../glyphs/lib/renderGlyph";
+import type { GlyphLibrary } from "../glyphs/types/handwriting";
+// animation constants only used by the standalone renderer, not teacher pen
 
 export type Tool = "pen" | "eraser";
 
@@ -30,12 +35,18 @@ export interface TeacherInk {
 
 interface Props {
   strokes: Stroke[];
+  /** The problem, written in the band above line 1. Not student work. */
+  problem: string;
+  /** Highlight line 1 and invite the first step. True while the paper has no student ink. */
+  promptStart: boolean;
   tool: Tool;
   markers: Map<number, Marker>;
   errorLine: number | null;
   selectedLine: number | null;
-  /** When set, animates red teacher handwriting beside that line. */
+  /** When set, animates red teacher handwriting beside that line using personal glyphs. */
   teacherInk: TeacherInk | null;
+  /** Personal glyph dataset — drives the teacher-pen renderer. */
+  glyphLibrary: GlyphLibrary | null;
   onAdd: (s: Stroke) => void;
   onErase: (ids: number[]) => void;
   onSelectLine: (line: number) => void;
@@ -45,10 +56,20 @@ interface Props {
 }
 
 const ERASER_R = 14;
-/** Duration of the teacher-pen reveal animation in milliseconds. */
-const TEACHER_ANIM_MS = 1100;
+const TEACHER_FONT_HEIGHT = 20;          // smaller so it doesn't crowd the student's work
+const TEACHER_FONT_HEIGHT_ABOVE = 16;    // even smaller when placed above the line
+const TEACHER_STROKE_WIDTH = 1.4;
 
-export function Board({ strokes, tool, markers, errorLine, selectedLine, teacherInk, onAdd, onErase, onSelectLine, onInteract, theme }: Props) {
+/** Stored layout + progress for the animated teacher annotation. */
+type TeacherState = {
+  glyphs: GlyphLayout[];
+  gi: number;            // current glyph index
+  si: number;            // current stroke index within glyph
+  pi: number;            // points revealed in current stroke
+  pointsPerFrame: number; // advances fast enough to finish in ~1 second
+};
+
+export function Board({ strokes, problem, promptStart, tool, markers, errorLine, selectedLine, teacherInk, glyphLibrary, onAdd, onErase, onSelectLine, onInteract, theme }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(800);
@@ -62,9 +83,8 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
   const eraserPos = useRef<[number, number] | null>(null);
   const frame = useRef(0);
 
-  // Teacher ink animation state (refs so they don't re-trigger draw useCallback)
-  const teacherAnimRef = useRef<TeacherAnim | null>(null);
-  const teacherRevealRef = useRef(0);
+  // Teacher ink animation state (glyph renderer)
+  const teacherStateRef = useRef<TeacherState | null>(null);
   const teacherRafRef = useRef(0);
 
   useEffect(() => {
@@ -79,12 +99,22 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
   // down rather than cutting lines off, so work looks the same on every device.
   const boardW = Math.max(width, MIN_BOARD_W);
   const scale = width / boardW;
+  useEffect(() => {
+    const stage = wrapRef.current?.closest(".board-stage");
+    if (stage instanceof HTMLElement) stage.style.setProperty("--q-band", `${LINE_H * scale}px`);
+  }, [scale]);
+  // The question sits in its own band so line 1 stays the first line of work.
+  const paperH = BOARD_H + LINE_H;
+  const question = useMemo(
+    () => questionStrokes(problem, Math.max(200, boardW - 40)),
+    [problem, boardW],
+  );
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
-    const pxW = Math.round(width * dpr), pxH = Math.round(BOARD_H * scale * dpr);
+    const pxW = Math.round(width * dpr), pxH = Math.round(paperH * scale * dpr);
     if (canvas.width !== pxW || canvas.height !== pxH) {
       canvas.width = pxW;
       canvas.height = pxH;
@@ -94,19 +124,50 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
     const css = getComputedStyle(canvas);
     const color = (name: string) => css.getPropertyValue(name).trim();
     const ink = color("--ink");
+    const teacher = color("--teacher");
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
-    ctx.clearRect(0, 0, boardW, BOARD_H);
+    ctx.clearRect(0, 0, boardW, paperH);
+
+    ctx.fillStyle = color("--q-band-bg");
+    ctx.fillRect(0, 0, boardW, LINE_H);
+    ctx.fillStyle = ink;
+    for (const s of question) ctx.fill(strokePath(s));
+    ctx.strokeStyle = color("--rule-strong");
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, LINE_H + 0.5);
+    ctx.lineTo(boardW, LINE_H + 0.5);
+    ctx.stroke();
+
+    ctx.save();
+    ctx.translate(0, LINE_H);
 
     if (errorLine) {
       const y = (errorLine - 1) * LINE_H;
       ctx.fillStyle = color("--row-error");
       ctx.fillRect(0, y, boardW, LINE_H);
-      ctx.fillStyle = "rgba(255, 162, 76, 0.95)";
+      ctx.fillStyle = color("--amber");
       ctx.fillRect(0, y + 6, 3, LINE_H - 12);
     }
     if (selectedLine && selectedLine !== errorLine) {
       ctx.fillStyle = color("--row-selected");
       ctx.fillRect(0, (selectedLine - 1) * LINE_H, boardW, LINE_H);
+    }
+    if (promptStart && errorLine !== 1) {
+      ctx.fillStyle = color("--row-prompt");
+      ctx.fillRect(0, 0, boardW, LINE_H);
+      ctx.fillStyle = color("--prompt-bar");
+      ctx.fillRect(0, 6, 3, LINE_H - 12);
+      ctx.font = '30px "Bradley Hand", "Noteworthy", "Chalkboard SE", cursive';
+      ctx.textBaseline = "middle";
+      // Leave a little room on the right so the hint never runs under the tools.
+      const room = boardW - 36 - 176 / Math.max(scale, 0.01);
+      const phrase = ["Write your first step here", "First step"].find((p) => ctx.measureText(p).width <= room);
+      if (phrase) {
+        ctx.fillStyle = color("--prompt-text");
+        ctx.fillText(phrase, 28, LINE_H * 0.5);
+      }
+      ctx.textBaseline = "alphabetic";
     }
 
     ctx.strokeStyle = color("--rule");
@@ -136,10 +197,34 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
       ctx.fill(outlinePath(live.current.points, live.current.pen, false));
     }
 
-    // Red teacher annotation (drawn after student ink, excluded from snapshots)
-    const tAnim = teacherAnimRef.current;
-    if (tAnim && teacherRevealRef.current > 0) {
-      drawTeacherAnim(ctx, tAnim, teacherRevealRef.current);
+    // Red teacher annotation — rendered via personal glyph library
+    const ts = teacherStateRef.current;
+    if (ts && ts.glyphs.length > 0) {
+      // Draw all fully-completed glyphs
+      for (let g = 0; g < ts.gi && g < ts.glyphs.length; g++) {
+        const layout = ts.glyphs[g];
+        if (layout.type === "space" || !layout.glyph) continue;
+        drawGlyph(ctx, layout.glyph, layout.placeX, layout.baseline, {
+          ...layout.drawOpts,
+          strokeStyle: teacher,
+        });
+      }
+      // Draw the in-progress glyph partially
+      if (ts.gi < ts.glyphs.length) {
+        const layout = ts.glyphs[ts.gi];
+        if (layout.glyph && layout.type === "glyph") {
+          // All strokes before the current one, fully drawn
+          for (let s = 0; s < ts.si; s++) {
+            drawGlyphPartialStroke(ctx, layout.glyph, layout.placeX, layout.baseline,
+              { ...layout.drawOpts, strokeStyle: teacher },
+              s, layout.glyph.strokes[s]?.length ?? 0);
+          }
+          // Current stroke, partially drawn
+          drawGlyphPartialStroke(ctx, layout.glyph, layout.placeX, layout.baseline,
+            { ...layout.drawOpts, strokeStyle: teacher },
+            ts.si, ts.pi);
+        }
+      }
     }
 
     if (eraserPos.current) {
@@ -150,7 +235,8 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
       ctx.arc(x, y, ERASER_R, 0, Math.PI * 2);
       ctx.stroke();
     }
-  }, [strokes, width, boardW, scale, errorLine, selectedLine, theme]);
+    ctx.restore();
+  }, [strokes, question, width, boardW, scale, paperH, errorLine, selectedLine, promptStart, theme]);
 
   // Scheduled frames must use the newest props, not the ones from when they were scheduled.
   const drawRef = useRef(draw);
@@ -165,50 +251,115 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
     draw();
   }, [draw]);
 
-  // Animate teacher ink whenever the hint changes.
-  // We intentionally capture `strokes` and `boardW` at the moment teacherInk
-  // is set (i.e. when the student clicked "Give me a hint"), so the note is
-  // placed relative to the ink that was on screen at that instant.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Animate teacher ink using personal glyph renderer whenever the hint changes.
   useEffect(() => {
     cancelAnimationFrame(teacherRafRef.current);
-    if (!teacherInk) {
-      teacherAnimRef.current = null;
-      teacherRevealRef.current = 0;
-      requestDraw();
-      return;
+    teacherStateRef.current = null;
+    requestDraw();
+
+    if (!teacherInk || !glyphLibrary) return;
+
+    // Lowercase the phrase — only lowercase glyphs are in the dataset
+    const phrase = teacherInk.phrase.toLowerCase();
+    const seed = teacherInk.line * 997 + (phrase.charCodeAt(0) || 0);
+
+    // Find the rightmost x of student ink on the target line
+    const lineStrokes = strokes.filter((s) => lineOf(s) === teacherInk.line);
+    const rightEdge = lineStrokes.length > 0
+      ? Math.max(...lineStrokes.map((s) => s.box.maxX))
+      : 28;
+
+    const GAP = 14;
+
+    // --- Beside attempt ---
+    const baseFontH = TEACHER_FONT_HEIGHT;
+    const baseline = (teacherInk.line - 1) * LINE_H + LINE_H * 0.72;
+    let startX = rightEdge + GAP;
+    let usedFontH = baseFontH;
+    let usedBaseline = baseline;
+
+    let result = layoutText(phrase, glyphLibrary, startX, baseline, {
+      fontHeight: baseFontH,
+      inkClearance: 1,
+      strokeWidthPx: TEACHER_STROKE_WIDTH,
+      seed,
+    });
+
+    // --- If overflow, go above the line with a smaller font ---
+    if (startX + result.totalWidth > boardW - 8) {
+      startX = 28;
+      usedFontH = TEACHER_FONT_HEIGHT_ABOVE;
+      usedBaseline = (teacherInk.line - 1) * LINE_H + usedFontH + 2;
+      result = layoutText(phrase, glyphLibrary, startX, usedBaseline, {
+        fontHeight: usedFontH,
+        inkClearance: 1,
+        strokeWidthPx: Math.max(0.8, TEACHER_STROKE_WIDTH * (usedFontH / baseFontH)),
+        seed,
+      });
     }
 
-    const anim = buildTeacherAnim(teacherInk.phrase, teacherInk.line, strokes, boardW);
-    teacherAnimRef.current = anim;
-    teacherRevealRef.current = 0;
+    if (result.glyphs.length === 0) return;
 
-    if (!anim || anim.totalPoints === 0) {
-      requestDraw();
-      return;
+    // Pre-count total points so we can target exactly ~60 frames (≈1 second)
+    let totalPoints = 0;
+    for (const layout of result.glyphs) {
+      if (layout.type !== "glyph" || !layout.glyph) continue;
+      for (const stroke of layout.glyph.strokes) totalPoints += stroke.length;
     }
+    const TARGET_FRAMES = 60; // ~1 second at 60 fps
+    const pointsPerFrame = Math.max(1, Math.ceil(totalPoints / TARGET_FRAMES));
 
-    const startTime = performance.now();
-    const tick = () => {
-      const elapsed = performance.now() - startTime;
-      const r = Math.min(
-        Math.round((elapsed / TEACHER_ANIM_MS) * anim.totalPoints),
-        anim.totalPoints,
-      );
-      teacherRevealRef.current = r;
+    teacherStateRef.current = { glyphs: result.glyphs, gi: 0, si: 0, pi: pointsPerFrame, pointsPerFrame };
+    requestDraw();
+
+    let lastFrameTime = 0;
+    function tick(now: number) {
+      const ts = teacherStateRef.current;
+      if (!ts) return;
+      if (now - lastFrameTime < 14) { teacherRafRef.current = requestAnimationFrame(tick); return; }
+      lastFrameTime = now;
+
+      // Advance by pointsPerFrame through the glyph list (no inter-stroke pauses)
+      let toAdvance = ts.pointsPerFrame;
+      while (toAdvance > 0 && ts.gi < ts.glyphs.length) {
+        const layout = ts.glyphs[ts.gi];
+        if (layout.type === "space" || !layout.glyph || layout.type === "fallback") {
+          ts.gi++; ts.si = 0; ts.pi = ts.pointsPerFrame;
+          continue;
+        }
+        const stroke = layout.glyph.strokes[ts.si];
+        if (!stroke) {
+          ts.gi++; ts.si = 0; ts.pi = ts.pointsPerFrame;
+          continue;
+        }
+        const remaining = stroke.length - ts.pi;
+        if (toAdvance >= remaining) {
+          toAdvance -= remaining;
+          ts.si++;
+          ts.pi = ts.pointsPerFrame;
+          if (ts.si >= layout.glyph.strokes.length) {
+            ts.gi++; ts.si = 0;
+          }
+        } else {
+          ts.pi += toAdvance;
+          toAdvance = 0;
+        }
+      }
+
       requestDraw();
-      if (r < anim.totalPoints) {
+      if (ts.gi < ts.glyphs.length) {
         teacherRafRef.current = requestAnimationFrame(tick);
       }
-    };
-    teacherRafRef.current = requestAnimationFrame(tick);
+    }
 
+    teacherRafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(teacherRafRef.current);
-  }, [teacherInk]); // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teacherInk, glyphLibrary]);
 
   const toPoint = (e: PointerEvent | React.PointerEvent, rect: DOMRect): Point => [
     (e.clientX - rect.left) / scale,
-    (e.clientY - rect.top) / scale,
+    (e.clientY - rect.top) / scale - LINE_H,
     e.pointerType === "pen" ? Math.max(0.05, e.pressure) : 0.5,
   ];
 
@@ -251,6 +402,16 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
     }
     const rect = e.currentTarget.getBoundingClientRect();
     const p = toPoint(e, rect);
+    // The question band is not a work line.
+    if (p[1] < 0) {
+      activePointer.current = null;
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // Capture was already released.
+      }
+      return;
+    }
     // The stylus's eraser end, or the right mouse button, erases.
     const erase = tool === "eraser" || e.button === 5 || e.button === 2;
     if (erase) {
@@ -329,14 +490,15 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
 
   return (
     <div className="board-scroll">
-      <div className={`board${scale < 0.7 ? " compact" : ""}`} style={{ height: BOARD_H * scale }}>
+      <div className={`board${scale < 0.7 ? " compact" : ""}`} style={{ height: paperH * scale }}>
         <div className="gutter">
+          <div className="gutter-question" style={{ height: LINE_H * scale }} aria-hidden="true">Q</div>
           {Array.from({ length: LINES }, (_, i) => i + 1).map((line) => {
             const m = markers.get(line);
             return (
               <button
                 key={line}
-                className={`gutter-row${selectedLine === line ? " selected" : ""}${m ? ` has-${m.status}` : ""}`}
+                className={`gutter-row${selectedLine === line ? " selected" : ""}${promptStart && line === 1 ? " prompt" : ""}${m ? ` has-${m.status}` : ""}`}
                 style={{ height: LINE_H * scale }}
                 onClick={() => m && onSelectLine(line)}
                 disabled={!m}
@@ -352,7 +514,7 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
           <canvas
             ref={canvasRef}
             className={`ink tool-${tool}`}
-            style={{ width, height: BOARD_H * scale }}
+            style={{ width, height: paperH * scale }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={finish}

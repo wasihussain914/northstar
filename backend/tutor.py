@@ -2,7 +2,9 @@
 
 Claude is the default. Gemini (Google AI / Gemini Developer API) is used when
 NORTHSTAR_PROVIDER=gemini, when NORTHSTAR_MODEL names a Gemini model, or when
-only a Google AI key is set. Both clients stay in this module.
+only a Google AI key is set. Grok (xAI) works the same way: NORTHSTAR_PROVIDER=grok,
+a NORTHSTAR_MODEL starting with "grok", or only an XAI_API_KEY set. All clients
+stay in this module.
 
 Two calls:
   read_board()    - vision: transcribe every numbered line and judge it. Kept
@@ -13,9 +15,12 @@ Two calls:
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import os
+import urllib.error
+import urllib.request
 from typing import Any
 
 import anthropic
@@ -29,6 +34,8 @@ MODEL = os.environ.get("NORTHSTAR_MODEL", "claude-sonnet-5-5")
 # Flash is the live-feedback counterpart to Sonnet: vision plus structured JSON,
 # without a long thinking pass.
 GEMINI_MODEL = "gemini-3.8-flash"
+# Grok 4 is xAI's multimodal flagship: vision plus strict structured JSON.
+XAI_MODEL = "grok-4"
 
 _client: anthropic.AsyncAnthropic | None = None
 _gemini: genai.Client | None = None
@@ -46,20 +53,47 @@ def google_api_key() -> str:
     return (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
 
 
+def xai_api_key() -> str:
+    return (os.environ.get("XAI_API_KEY") or os.environ.get("GROK_API_KEY") or "").strip()
+
+
+def using_grok() -> bool:
+    """Grok when explicitly selected, or when only an xAI key is set."""
+    explicit = os.environ.get("NORTHSTAR_PROVIDER", "").strip().lower()
+    if explicit in {"grok", "xai"}:
+        return True
+    if explicit:
+        return False
+    named = os.environ.get("NORTHSTAR_MODEL", "").strip().lower()
+    if named.startswith("grok"):
+        return True
+    return bool(xai_api_key()) and not os.environ.get("ANTHROPIC_API_KEY") and not google_api_key()
+
+
 def using_gemini() -> bool:
     """Claude unless the environment explicitly selects Gemini, or only a Google key is set."""
     explicit = os.environ.get("NORTHSTAR_PROVIDER", "").strip().lower()
     if explicit in {"gemini", "google"}:
         return True
-    if explicit in {"claude", "anthropic"}:
+    if explicit in {"claude", "anthropic", "grok", "xai"}:
         return False
     named = os.environ.get("NORTHSTAR_MODEL", "").strip().lower()
     if named.startswith("gemini"):
         return True
+    if named.startswith("grok"):
+        return False
     return bool(google_api_key()) and not os.environ.get("ANTHROPIC_API_KEY")
 
 
 def active_model() -> str:
+    if using_grok():
+        explicit = os.environ.get("NORTHSTAR_XAI_MODEL", "").strip()
+        if explicit:
+            return explicit
+        named = os.environ.get("NORTHSTAR_MODEL", "").strip()
+        if named.startswith("grok"):
+            return named
+        return XAI_MODEL
     if using_gemini():
         explicit = os.environ.get("NORTHSTAR_GEMINI_MODEL", "").strip()
         if explicit:
@@ -69,12 +103,14 @@ def active_model() -> str:
             return named
         return GEMINI_MODEL
     named = os.environ.get("NORTHSTAR_MODEL", "").strip()
-    if not named or named.startswith("gemini"):
+    if not named or named.startswith("gemini") or named.startswith("grok"):
         return "claude-sonnet-5-5"
     return named
 
 
 def has_api_key() -> bool:
+    if using_grok():
+        return bool(xai_api_key())
     if using_gemini():
         return bool(google_api_key())
     return bool(os.environ.get("ANTHROPIC_API_KEY"))
@@ -192,7 +228,7 @@ BOARD_SCHEMA: dict[str, Any] = {
         "route_note": {"type": "string"},
     },
     "required": ["problem_sympy", "target_variable", "task", "lines",
-                 "next_step_hint", "on_track_message", "eta_steps", "route_note"],
+                 "next_step_hint", "next_step_ink", "on_track_message", "eta_steps", "route_note"],
     "additionalProperties": False,
 }
 
@@ -344,7 +380,78 @@ async def _structured_gemini(content: list[dict] | str, schema: dict, max_tokens
     return data
 
 
+# --- Grok (xAI): OpenAI-compatible chat completions over stdlib HTTP ---
+
+def _grok_messages(content: list[dict] | str) -> list[dict]:
+    if isinstance(content, str):
+        user: Any = content
+    else:
+        parts: list[dict] = []
+        for block in content:
+            if block.get("type") == "image":
+                source = block["source"]
+                parts.append({"type": "image_url", "image_url": {
+                    "url": f"data:{source.get('media_type', 'image/png')};base64,{source['data']}",
+                    "detail": "high"}})
+            elif block.get("type") == "text":
+                parts.append({"type": "text", "text": block["text"]})
+        user = parts
+    return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
+
+
+def _xai_request(payload: dict) -> dict:
+    req = urllib.request.Request(
+        "https://api.x.ai/v1/chat/completions",
+        data=json.dumps(payload).encode(),
+        headers={"authorization": f"Bearer {xai_api_key()}", "content-type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=90) as response:
+        return json.loads(response.read())
+
+
+async def _grok_chat(content: list[dict] | str, schema: dict | None, max_tokens: int) -> str:
+    if not xai_api_key():
+        raise TutorError("No xAI API key found. Add XAI_API_KEY to backend/.env and restart the server.")
+    payload: dict[str, Any] = {"model": active_model(), "messages": _grok_messages(content),
+                               "max_tokens": max_tokens, "temperature": 0.2}
+    if schema is not None:
+        payload["response_format"] = {"type": "json_schema",
+                                      "json_schema": {"name": "northstar", "strict": True, "schema": schema}}
+    try:
+        out = await asyncio.to_thread(_xai_request, payload)
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode(errors="replace")[:300]
+        if exc.code in (401, 403):
+            raise TutorError("The xAI API key is missing or invalid.") from exc
+        if exc.code == 429:
+            raise TutorError("Rate limited by the xAI API; try again in a moment.") from exc
+        raise TutorError(f"xAI API error ({exc.code}): {body}") from exc
+    except urllib.error.URLError as exc:
+        raise TutorError("Couldn't reach the xAI API. Check your connection.") from exc
+    try:
+        text = out["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise TutorError("Grok returned an empty reply.") from exc
+    if not text:
+        raise TutorError("Grok returned an empty reply.")
+    return text
+
+
+async def _structured_grok(content: list[dict] | str, schema: dict, max_tokens: int) -> dict:
+    text = await _grok_chat(content, schema, max_tokens)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise TutorError("Grok returned malformed JSON.") from exc
+    if not isinstance(data, dict):
+        raise TutorError("Grok returned malformed JSON.")
+    return data
+
+
 async def _structured(content: list[dict] | str, schema: dict, max_tokens: int = 8000) -> dict:
+    if using_grok():
+        return await _structured_grok(content, schema, max_tokens)
     if using_gemini():
         return await _structured_gemini(content, schema, max_tokens)
     try:
@@ -412,10 +519,63 @@ async def read_problem(image_png_b64: str) -> dict:
     return await _structured(content, PROBLEM_SCHEMA, max_tokens=2000)
 
 
+PLAN_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "verdict": {"type": "string", "enum": ["good", "partial", "off"],
+                    "description": "good: the route reaches the destination; partial: right direction, something "
+                                   "missing or out of order; off: this route won't get there"},
+        "feedback": _str("At most two short, warm sentences reacting to the plan - guiding, never solving"),
+        "spoken": _str("The same feedback in plain spoken words, no symbols"),
+    },
+    "required": ["verdict", "feedback", "spoken"],
+    "additionalProperties": False,
+}
+
+PLAN_RULES = """Before writing anything, the student described their plan for solving the whole problem, like a \
+driver describing the route before pulling out. Judge the plan as a navigator would, without driving: verdict \
+good when the route reaches the destination, partial when it's the right direction but a step is missing, vague \
+or out of order, off when that route won't get there. feedback: at most two short, warm sentences — name what's \
+right about the route, and if something is missing, point at where to look without doing the step for them. \
+Never state the final answer or perform any algebra."""
+
+
+async def check_plan(problem: str, plan: str, lang: str = "en") -> dict:
+    prompt = (f"{PLAN_RULES}{lang_note(lang)}\n\nProblem: {problem or '(not given)'}\n\n"
+              f"The student's plan, in their own words: {plan}")
+    return await _structured(prompt, PLAN_SCHEMA, max_tokens=2000)
+
+
+PRACTICE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "problem": _str("One new practice problem as one short line of plain text, same style as the original"),
+        "latex": _str("Just the math as LaTeX (no surrounding $)"),
+        "skill": _str("2-5 word name of the skill the mistake was about, e.g. 'distributing a negative'"),
+    },
+    "required": ["problem", "latex", "skill"],
+    "additionalProperties": False,
+}
+
+PRACTICE_RULES = """The student just finished a problem where they took a wrong turn, caught it, and fixed it. \
+Invent exactly ONE new practice problem that exercises the same skill they got wrong: same type and about the \
+same difficulty as the original, but different numbers, a different answer, and ideally a slightly different \
+shape so the skill transfers. Keep the instruction word ("Solve", "Differentiate", ...). Also name the skill in \
+a few words. Do not include the answer or any solution steps anywhere."""
+
+
+async def practice_problem(problem: str, wrong_latex: str, note: str, lang: str = "en") -> dict:
+    prompt = (f"{PRACTICE_RULES}{lang_note(lang)}\n\nOriginal problem: {problem or '(not given)'}\n"
+              f"The wrong line they wrote: {wrong_latex or '(unknown)'}\n"
+              f"What went wrong there: {note or '(not recorded)'}")
+    return await _structured(prompt, PRACTICE_SCHEMA, max_tokens=2000)
+
+
 ASK_INSTRUCTIONS = """The student just asked you a question out loud while working. Answer it as Untangled: \
 in at most three short sentences, warm and concrete, guiding rather than solving. Never state the final answer, \
 even if asked directly; offer the next nudge instead. Your answer will be read aloud by a speech synthesizer, so \
-write math in words a person would say ("two x minus six equals ten"), with no LaTeX, symbols or markdown."""
+write math in words a person would say ("two x minus six equals ten"), with no LaTeX, symbols or markdown. \
+Speak like a person: contractions, natural rhythm, warm and brief."""
 
 
 async def ask(problem: str, question: str, image_png_b64: str | None, transcript: dict[int, str] | None,
@@ -428,6 +588,8 @@ async def ask(problem: str, question: str, image_png_b64: str | None, transcript
         f"{ASK_INSTRUCTIONS}{lang_note(lang)}\n\nProblem: {problem or '(not given)'}\n"
         f"What the last check found:\n{context or '(no check yet)'}\n\n"
         f"Student's question: {question}")})
+    if using_grok():
+        return {"answer": (await _grok_chat(content, None, 4000)).strip()}
     if using_gemini():
         response = await _gemini_generate(content, None, 4000)
         answer = _gemini_text(
@@ -463,9 +625,11 @@ HINT_RULES = """Write exactly three hints for that line, from gentle to specific
 look and asks a question. Hint 2 names the rule or idea that was misapplied. Hint 3 shows the corrected version \
 of that one line only. Never state the final answer or any solution values, in any hint.
 Also write hint_ink: three very short margin notes (at most four words each), one per hint level, with matching \
-specificity. Keep each as a terse teacher note (e.g. "check the sign"), not a sentence; no arrows or line numbers.
+specificity: words a teacher would jot in red beside that line (e.g. "check the sign"), not a sentence. \
+No diagram, no arrows, no line numbers, and no final answer.
 Also write spoken_nudge: one short sentence (under 15 words) a GPS voice could say about the wrong turn, e.g. \
-"Recalculating. Take another look at the sign in line 3.\""""
+"Recalculating. Take another look at the sign in line 3." Write it the way a calm human navigator would \
+actually say it out loud — contractions and natural rhythm, never a stiff script."""
 
 
 async def explain_line(problem: str, lines: list[dict], line: int, detail: str, note: str = "",

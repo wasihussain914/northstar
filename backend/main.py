@@ -18,11 +18,14 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 load_dotenv(Path(__file__).with_name(".env"))
 
 import fake_tutor  # noqa: E402
+import tts  # noqa: E402
 import tutor  # noqa: E402  (needs the env loaded first)
 import verify  # noqa: E402
 
@@ -158,7 +161,9 @@ def decode_png(data: str) -> tuple[str, bytes]:
 async def health() -> dict:
     return {"ok": True, "has_key": FAKE_VISION or tutor.has_api_key(),
             "model": fake_tutor.MODEL if FAKE_VISION else tutor.active_model(),
-            "provider": "fake" if FAKE_VISION else ("gemini" if tutor.using_gemini() else "claude"),
+            "provider": "fake" if FAKE_VISION else (
+                "grok" if tutor.using_grok() else "gemini" if tutor.using_gemini() else "claude"),
+            "tts": tts.enabled(),
             "fake": FAKE_VISION}
 
 
@@ -171,20 +176,35 @@ async def check(req: CheckRequest) -> dict:
         DEBUG_DIR.mkdir(exist_ok=True)
         (DEBUG_DIR / f"{stamp}.png").write_bytes(raw)
 
+    def line_steps(b: dict) -> list[tuple[int, str]]:
+        return [(l["line"], l["sympy"]) for l in sorted(b["lines"], key=lambda l: l["line"])
+                if l["kind"] not in SKIP_KINDS and l["kind"] != "incomplete"]
+
     started = time.perf_counter()
-    try:
-        if FAKE_VISION:
-            board = await fake_tutor.read_board(req.problem, req.transcript, req.lines, req.lang)
-        else:
-            board = await tutor.read_board(req.problem, image, req.lines, req.transcript, req.lang)
-    except tutor.TutorError as exc:
-        raise HTTPException(502, str(exc))
+    board = sym = None
+
+    # Fast path: every line was typed, so the text is exact and a model read
+    # adds nothing. SymPy alone turns a check into milliseconds; if it can't
+    # decide a single line, fall through to the full model read below.
+    if not FAKE_VISION and req.transcript and req.lines and all(n in req.transcript for n in req.lines):
+        candidate = fake_tutor.transcript_board(req.problem, req.transcript, req.lines)
+        verdict_check = await sympy_pool.check(candidate.get("problem_sympy", ""), line_steps(candidate),
+                                               candidate.get("target_variable", ""), candidate.get("task") or "")
+        if verdict_check and any(r["verdict"] != "unknown" for r in verdict_check["results"].values()):
+            board, sym = candidate, verdict_check
+
+    if board is None:
+        try:
+            if FAKE_VISION:
+                board = await fake_tutor.read_board(req.problem, req.transcript, req.lines, req.lang)
+            else:
+                board = await tutor.read_board(req.problem, image, req.lines, req.transcript, req.lang)
+        except tutor.TutorError as exc:
+            raise HTTPException(502, str(exc))
+        sym = await sympy_pool.check(board.get("problem_sympy", ""), line_steps(board),
+                                     board.get("target_variable", ""), board.get("task") or "")
     read_ms = (time.perf_counter() - started) * 1000
 
-    steps = [(l["line"], l["sympy"]) for l in sorted(board["lines"], key=lambda l: l["line"])
-             if l["kind"] not in SKIP_KINDS and l["kind"] != "incomplete"]
-    sym = await sympy_pool.check(board.get("problem_sympy", ""), steps, board.get("target_variable", ""),
-                                 board.get("task") or "")
     lines = merge(board, sym)
 
     first_error = next((l["line"] for l in lines if l["status"] == "error"), None)
@@ -249,6 +269,60 @@ async def problem(req: ProblemRequest) -> dict:
     return {"problems": problems}
 
 
+class SpeakRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=600)
+    lang: str = Field(default="en", max_length=8)
+
+
+@app.post("/api/speak")
+async def speak(req: SpeakRequest) -> Response:
+    """The GPS voice as neural audio. 503 when no TTS key: use browser speech."""
+    if not tts.enabled():
+        raise HTTPException(503, "No XAI_API_KEY or ELEVENLABS_API_KEY on the server; use browser speech.")
+    try:
+        audio = await tts.speak(req.text, req.lang)
+    except Exception as exc:
+        raise HTTPException(502, f"Text-to-speech failed: {exc}")
+    return Response(content=audio, media_type="audio/mpeg")
+
+
+class PlanRequest(BaseModel):
+    problem: str = Field(default="", max_length=500)
+    plan: str = Field(min_length=1, max_length=1000)
+    lang: str = Field(default="en", max_length=8)
+
+
+@app.post("/api/plan")
+async def plan(req: PlanRequest) -> dict:
+    """Route preview: the student says how they'd solve it; the navigator judges the route."""
+    try:
+        out = await (fake_tutor if FAKE_VISION else tutor).check_plan(req.problem, req.plan, req.lang)
+    except tutor.TutorError as exc:
+        raise HTTPException(502, str(exc))
+    return {"verdict": out.get("verdict", "partial"), "feedback": out.get("feedback", ""),
+            "spoken": out.get("spoken", out.get("feedback", ""))}
+
+
+class PracticeRequest(BaseModel):
+    problem: str = Field(default="", max_length=500)
+    wrong_line: str = Field(default="", max_length=300)
+    note: str = Field(default="", max_length=500)
+    lang: str = Field(default="en", max_length=8)
+
+
+@app.post("/api/practice")
+async def practice(req: PracticeRequest) -> dict:
+    """A detour: one fresh problem exercising the skill the student just got wrong."""
+    try:
+        out = await (fake_tutor if FAKE_VISION else tutor).practice_problem(
+            req.problem, req.wrong_line, req.note, req.lang)
+    except tutor.TutorError as exc:
+        raise HTTPException(502, str(exc))
+    if not out.get("problem"):
+        raise HTTPException(422, "Couldn't chart a detour for that one.")
+    return {"problem": out["problem"], "latex": out.get("latex", ""), "skill": out.get("skill", "")}
+
+
 class AskRequest(BaseModel):
     problem: str = Field(default="", max_length=500)
     question: str = Field(min_length=1, max_length=500)
@@ -266,3 +340,21 @@ async def ask(req: AskRequest) -> dict:
                                                                 req.context, req.lang)
     except tutor.TutorError as exc:
         raise HTTPException(502, str(exc))
+
+
+_SAMPLES_PATH = Path(__file__).with_name("data") / "samples.json"
+
+
+@app.get("/api/samples")
+async def get_samples():
+    """Return the handwriting glyph dataset as JSON."""
+    from fastapi.responses import FileResponse
+    if not _SAMPLES_PATH.exists():
+        raise HTTPException(404, "samples.json not found")
+    return FileResponse(_SAMPLES_PATH, media_type="application/json")
+
+# Serve the built frontend (frontend/dist) when it exists, so one process can
+# host the whole app for deploys. API routes above take precedence.
+_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if _DIST.is_dir():
+    app.mount("/", StaticFiles(directory=_DIST, html=True), name="app")
