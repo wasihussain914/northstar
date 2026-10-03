@@ -1,9 +1,9 @@
-import { textToStrokes } from "./board/handwriting";
+// import { textToStrokes } from "./board/handwriting"; // superseded by vector glyph renderer
 import type { Stroke } from "./board/geometry";
 
 /**
  * Demo autopilot: writes a solve in animated "handwriting", takes a wrong turn
- * on purpose, waits for North Star to catch it, then fixes it and finishes.
+ * on purpose, waits for Untangled to catch it, then fixes it and finishes.
  * For presenting without a stylus.
  */
 
@@ -91,15 +91,15 @@ export async function runDemo(script: DemoScript, hooks: DemoHooks, signal: Abor
     if (signal.aborted) return;
     switch (step.do) {
       case "write": {
-        // Reveal the line left to right in chunks so it looks written.
-        const strokes = textToStrokes(step.text, step.line).sort((a, b) => a.box.minX - b.box.minX);
-        const chunks = 14;
-        const per = Math.ceil(strokes.length / chunks);
-        for (let i = 0; i < strokes.length; i += per) {
-          hooks.add(strokes.slice(i, i + per));
-          await sleep(WRITE_MS / chunks);
-        }
-        await sleep(350);
+        // textToStrokes removed — demo write steps are no-ops until the glyph renderer is wired in
+        // const strokes = textToStrokes(step.text, step.line).sort((a, b) => a.box.minX - b.box.minX);
+        // const chunks = 14;
+        // const per = Math.ceil(strokes.length / chunks);
+        // for (let i = 0; i < strokes.length; i += per) {
+        //   hooks.add(strokes.slice(i, i + per));
+        //   await sleep(WRITE_MS / chunks);
+        // }
+        await sleep(WRITE_MS);
         break;
       }
       case "erase":

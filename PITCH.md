@@ -1,7 +1,7 @@
-# North Star: pitch & demo script
+# Untangled: pitch & demo script
 
 ## One-liner
-**North Star is a GPS for solving math.** It watches you work on a whiteboard and, like a GPS, says *"Recalculating"* the
+**Untangled is a GPS for solving math.** It watches you work on a whiteboard and, like a GPS, says *"Recalculating"* the
 moment you take a wrong turn. It never drives for you.
 
 ## The problem (20s)
@@ -10,7 +10,7 @@ explaining where you are, and usually getting the whole solution back. That's li
 teleported to the destination: you arrive, but you never learn the route.
 
 ## The theme fit (Navigation)
-| GPS | North Star |
+| GPS | Untangled |
 |---|---|
 | Knows where you are without you saying | Reads your board live, with no copy-paste |
 | "Recalculating…" when you miss a turn | Pins the exact line where the math went wrong, says it out loud |
@@ -32,10 +32,10 @@ Opening line, stolen from the theme announcement itself: *"Before Google Maps, w
    pinned above the paper as a crop of the actual homework. (Fallback: pick the preset chip.)
 2. **Wrong turn (30s).** Write `2x − 6 + 4 = 10`, then deliberately `2x + 2 = 10`, then keep going: `2x = 8`.
    → Line 2 gets an amber pin, the route turns dashed, and the voice says *"Recalculating…"*. Point out that line 3 is still
-   green: North Star knows it correctly follows from the mistake. **Only the wrong turn is flagged.**
+   green: Untangled knows it correctly follows from the mistake. **Only the wrong turn is flagged.**
 3. **Hint ladder (20s).** Tap "Give me a hint" once. It points at where to look, not the answer.
 4. **Ask by voice (15s).** Tap the mic: "Why is line 2 wrong?" It answers out loud in plain words.
-5. **Fix it (25s).** Erase and rewrite line 2. North Star notices line 3 now needs updating. Fix it, write `x = 6`.
+5. **Fix it (25s).** Erase and rewrite line 2. Untangled notices line 3 now needs updating. Fix it, write `x = 6`.
    → *"You have arrived."* Trip summary appears — with **Next stop · 2 of 2** if you scanned the whole worksheet.
    If there's time: flip the language picker to Español and ask "why was line 2 wrong?" — the answer comes back
    spoken in Spanish.

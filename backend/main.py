@@ -1,4 +1,4 @@
-"""North Star API.
+"""Untangled API.
 
 POST /api/check takes a snapshot of the board and returns, per line, whether
 the student is still on route, plus hints for the first wrong turn.
@@ -79,7 +79,7 @@ async def lifespan(_: FastAPI):
     sympy_pool.close()
 
 
-app = FastAPI(title="North Star", lifespan=lifespan)
+app = FastAPI(title="Untangled", lifespan=lifespan)
 
 
 def cors_origins() -> list[str]:
@@ -341,6 +341,17 @@ async def ask(req: AskRequest) -> dict:
     except tutor.TutorError as exc:
         raise HTTPException(502, str(exc))
 
+
+_SAMPLES_PATH = Path(__file__).with_name("data") / "samples.json"
+
+
+@app.get("/api/samples")
+async def get_samples():
+    """Return the handwriting glyph dataset as JSON."""
+    from fastapi.responses import FileResponse
+    if not _SAMPLES_PATH.exists():
+        raise HTTPException(404, "samples.json not found")
+    return FileResponse(_SAMPLES_PATH, media_type="application/json")
 
 # Serve the built frontend (frontend/dist) when it exists, so one process can
 # host the whole app for deploys. API routes above take precedence.
