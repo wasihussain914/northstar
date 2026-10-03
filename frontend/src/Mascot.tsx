@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { caption, onSpeech, speak } from "./voice";
 
 /**
- * Pip: North Star's co-pilot. A paper-cutout navigator who lip-syncs the GPS
+ * Pip: North Star's co-pilot, dressed for Cornell (carnelian and white, a
+ * bear-eared beanie for the Big Red). A paper-cutout navigator who lip-syncs the GPS
  * voice (with a caption bubble, so it also works with the sound off), reacts
  * to the route, and hops when poked.
  */
@@ -18,6 +19,10 @@ const QUIPS = [
   "Math is a road trip with numbers.",
   "Buckle up. One step per line!",
   "Hey! I'm navigating here.",
+  "Go Big Red!",
+  "Ithaca is gorges. So is this math.",
+  "Easier than walking up Libe Slope.",
+  "Bundle up. It's cold in Ithaca.",
 ];
 
 const HIDE_KEY = "ns-pip-hidden";
@@ -107,7 +112,8 @@ export function Mascot({ mood, voiceOn }: { mood: PipMood; voiceOn: boolean }) {
 
 const SKIN = "#f7d9b5";
 const SKIN_EDGE = "#e2b78c";
-const NAVY = "#1f3a6b";
+const RED = "#b31b1b"; // Cornell carnelian
+const RED_DARK = "#8c1515";
 const GOLD = "#f5c451";
 const INK = "#2a211c";
 
@@ -116,27 +122,46 @@ function PipSvg() {
     <svg viewBox="0 0 160 200" aria-hidden="true">
       <ellipse className="pip-shadow" cx="80" cy="194" rx="36" ry="5" fill="rgba(0,0,0,0.22)" />
       <g className="pip-body">
-        {/* legs and shoes */}
-        <rect x="63" y="168" width="12" height="18" rx="3" fill="#2b2f3a" />
-        <rect x="85" y="168" width="12" height="18" rx="3" fill="#2b2f3a" />
-        <ellipse cx="67" cy="187" rx="12" ry="6.5" fill="#d94f3d" />
-        <ellipse cx="93" cy="187" rx="12" ry="6.5" fill="#d94f3d" />
+        <defs>
+          {/* red-and-white knit stripes for the scarf */}
+          <pattern id="pip-stripes" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(40)">
+            <rect width="7" height="7" fill="#fff" />
+            <rect width="3.5" height="7" fill={RED} />
+          </pattern>
+        </defs>
 
-        {/* arms (behind the jacket) */}
+        {/* jeans and white sneakers with red soles */}
+        <rect x="63" y="168" width="12" height="18" rx="3" fill="#2d3a57" />
+        <rect x="85" y="168" width="12" height="18" rx="3" fill="#2d3a57" />
+        <ellipse cx="67" cy="187" rx="12.5" ry="6.5" fill="#f6f6f4" stroke="#cfd2d8" strokeWidth="1.5" />
+        <ellipse cx="93" cy="187" rx="12.5" ry="6.5" fill="#f6f6f4" stroke="#cfd2d8" strokeWidth="1.5" />
+        <path d="M55.5 189.5 Q67 195 78.5 189.5" fill="none" stroke={RED} strokeWidth="2.5" strokeLinecap="round" />
+        <path d="M81.5 189.5 Q93 195 104.5 189.5" fill="none" stroke={RED} strokeWidth="2.5" strokeLinecap="round" />
+
+        {/* arms (behind the sweater), white-striped cuffs */}
         <g className="pip-arm pip-arm-l">
-          <rect x="38" y="146" width="13" height="27" rx="6.5" fill={NAVY} />
+          <rect x="38" y="146" width="13" height="27" rx="6.5" fill={RED} />
+          <rect x="38" y="163" width="13" height="3" fill="#fff" />
           <circle cx="44.5" cy="174" r="6.5" fill={SKIN} stroke={SKIN_EDGE} strokeWidth="1.5" />
         </g>
         <g className="pip-arm pip-arm-r">
-          <rect x="109" y="146" width="13" height="27" rx="6.5" fill={NAVY} />
+          <rect x="109" y="146" width="13" height="27" rx="6.5" fill={RED} />
+          <rect x="109" y="163" width="13" height="3" fill="#fff" />
           <circle cx="115.5" cy="174" r="6.5" fill={SKIN} stroke={SKIN_EDGE} strokeWidth="1.5" />
         </g>
 
-        {/* jacket, scarf, compass badge */}
-        <path d="M46 180 Q44 142 80 137 Q116 142 114 180 Z" fill={NAVY} />
-        <path d="M62 140 Q80 153 98 140 L96 148 Q80 160 64 148 Z" fill={GOLD} />
-        <circle cx="80" cy="166" r="9" fill={GOLD} />
-        <path d="M80 158.5 L82.2 164 L87.5 166 L82.2 168 L80 173.5 L77.8 168 L72.5 166 L77.8 164 Z" fill={NAVY} />
+        {/* Big Red varsity sweater with a white C */}
+        <path d="M46 180 Q44 142 80 137 Q116 142 114 180 Z" fill={RED} />
+        <rect x="46" y="173" width="68" height="7" fill={RED_DARK} />
+        <rect x="46" y="175.5" width="68" height="2" fill="#fff" opacity="0.85" />
+        <text x="83" y="171" textAnchor="middle" fontSize="23" fontWeight="800" fontFamily="Georgia, 'Times New Roman', serif" fill="#fff">
+          C
+        </text>
+
+        {/* striped scarf: around the neck, one end hanging down */}
+        <path d="M61 140 Q80 154 99 140 L97 149 Q80 161 63 149 Z" fill="url(#pip-stripes)" stroke={RED_DARK} strokeWidth="1" />
+        <path d="M58 145 L66 148.5 L63 168 L54 165 Z" fill="url(#pip-stripes)" stroke={RED_DARK} strokeWidth="1" />
+        <path d="M54 165 L53 169 M57 166 L56.4 170 M60 167 L59.5 171 M63 168 L62.6 172" stroke={RED_DARK} strokeWidth="1.4" strokeLinecap="round" />
 
         <g className="pip-head">
           {/* ears */}
@@ -148,11 +173,17 @@ function PipSvg() {
           <path d="M27 60 Q25 74 31 84 Q33 72 40 64 Q34 66 27 60 Z" fill={INK} />
           <path d="M133 60 Q135 74 129 84 Q127 72 120 64 Q126 66 133 60 Z" fill={INK} />
           {/* captain's hat with the North Star badge */}
+          {/* red knit beanie with little bear ears (go Big Red), North Star pin on the cuff */}
           <g className="pip-hat">
-            <path d="M36 48 Q38 10 80 8 Q122 10 124 48 Z" fill="#e9eef6" stroke="#9aa6ba" strokeWidth="2.5" />
-            <rect x="36" y="38" width="88" height="11" rx="3" fill={NAVY} />
-            <path d="M28 50 Q80 64 132 50 Q132 57 122 59 Q80 69 38 59 Q28 57 28 50 Z" fill="#14243f" />
-            <path d="M80 18 L83.3 26.7 L92 30 L83.3 33.3 L80 42 L76.7 33.3 L68 30 L76.7 26.7 Z" fill={GOLD} />
+            <circle cx="41" cy="23" r="12" fill={RED} />
+            <circle cx="41" cy="23" r="6" fill="#f2b3b0" />
+            <circle cx="119" cy="23" r="12" fill={RED} />
+            <circle cx="119" cy="23" r="6" fill="#f2b3b0" />
+            <path d="M30 58 Q30 8 80 6 Q130 8 130 58 Z" fill={RED} />
+            <path d="M55 52 Q54 22 62 12 M80 52 V7 M105 52 Q106 22 98 12" fill="none" stroke="rgba(0,0,0,0.12)" strokeWidth="2" strokeLinecap="round" />
+            <rect x="27" y="46" width="106" height="15" rx="7.5" fill={RED_DARK} />
+            <rect x="30" y="51.5" width="100" height="4" rx="2" fill="#fff" opacity="0.9" />
+            <path d="M112 46.5 L114.4 51.6 L119.5 54 L114.4 56.4 L112 61.5 L109.6 56.4 L104.5 54 L109.6 51.6 Z" fill={GOLD} stroke="#c99a2e" strokeWidth="0.8" />
           </g>
 
           {/* cheeks */}
