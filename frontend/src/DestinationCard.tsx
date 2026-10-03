@@ -13,13 +13,15 @@ interface Props {
   onJumpStop?: (i: number) => void;
   onEdit: (problem: string) => void;
   onScan: () => void;
+  /** How the work is going, shown on the card so it never covers the page. */
+  status?: React.ReactNode;
 }
 
 /**
  * Where we're headed: the problem, front and center above the paper — as the
  * scanned crop of real homework when there is one, editable text when not.
  */
-export function DestinationCard({ problem, latex, image, stopIndex = 0, stopCount = 0, onJumpStop, onEdit, onScan }: Props) {
+export function DestinationCard({ problem, latex, image, stopIndex = 0, stopCount = 0, onJumpStop, onEdit, onScan, status }: Props) {
   const [editing, setEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -70,6 +72,7 @@ export function DestinationCard({ problem, latex, image, stopIndex = 0, stopCoun
           />
         )}
       </div>
+      {status}
       <button className="btn scan-btn" onClick={onScan}>
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 7h3l1.5-2h7L17 7h3a1 1 0 011 1v11a1 1 0 01-1 1H4a1 1 0 01-1-1V8a1 1 0 011-1z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />

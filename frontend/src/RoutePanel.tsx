@@ -174,49 +174,61 @@ function Status({ phase, result, errorLine, failure, wrongTurns, onRetry }: {
 
   if (phase === "failed") {
     tone = "fail";
-    title = "Lost signal";
-    body = failure ?? "Something went wrong.";
+    title = "Couldn't check that";
+    body = plainFailure(failure);
   } else if (phase === "checking") {
     tone = "busy";
-    title = "Checking your route…";
-    body = result?.on_track_message || "Reading your work.";
+    title = "Checking your work…";
+    body = result?.on_track_message || "Reading what you wrote.";
   } else if (phase === "watching") {
     tone = "busy";
-    title = "Watching";
-    body = "I'll check as soon as you pause.";
+    title = "Keep going";
+    body = "I'll check it once you stop writing.";
   } else if (result && errorLine != null) {
     tone = "off";
-    title = "Off route";
+    title = `Take another look at line ${errorLine}`;
     const later = result.lines.some((l) => l.line > errorLine && l.status !== "skip");
     body = later
       ? `Line ${errorLine} doesn't follow from the line above it, and the lines after it build on that.`
       : `Line ${errorLine} doesn't follow from the line above it.`;
   } else if (result?.arrived) {
     tone = "arrived";
-    title = "You've arrived";
+    title = "You solved it";
     body = wrongTurns > 0
-      ? "You found your way back after a wrong turn. That's exactly how it's supposed to work."
-      : "Clean route, no wrong turns.";
+      ? "You caught your own mistake and fixed it. That's the whole point."
+      : "Every step checked out.";
   } else if (result) {
     tone = "on";
-    title = "On route";
+    title = "Looks right so far";
     body = result.on_track_message || "Every step so far checks out.";
   }
 
   return (
     <section className={`status tone-${tone}`}>
-      <div className="status-dot" />
-      <div>
-        <h2>{title}</h2>
-        <p>{body}</p>
-        {phase === "failed" && (
-          <button className="btn small" onClick={onRetry}>
-            Try again
-          </button>
-        )}
-      </div>
+      <h2>
+        <span className="status-dot" />
+        {title}
+      </h2>
+      <p>{body}</p>
+      {phase === "failed" && (
+        <button className="btn small retry" onClick={onRetry}>
+          Try again
+        </button>
+      )}
     </section>
   );
+}
+
+/** Turn a raw error into something a student can act on. */
+function plainFailure(failure: string | null): string {
+  const f = (failure ?? "").toLowerCase();
+  if (!f) return "Something went wrong on our end. Try again in a moment.";
+  if (f.includes("fetch") || f.includes("network") || f.includes("load failed")) {
+    return "Can't reach the checker right now. Make sure it's running, then try again.";
+  }
+  if (f.includes("key")) return "The checker isn't set up with an API key yet.";
+  if (f.includes("timeout") || f.includes("timed out")) return "That took too long. Try again.";
+  return "Something went wrong on our end. Try again in a moment.";
 }
 
 function Route({ result, problem, errorLine, selectedLine, onSelectLine }: {
@@ -249,7 +261,7 @@ function Route({ result, problem, errorLine, selectedLine, onSelectLine }: {
       </div>
       <ol className="route-list">
         <li className="route-node start">
-          <span className="node-icon star" aria-hidden="true">✦</span>
+          <span className="node-icon star" aria-hidden="true" />
           <div className="node-body">
             <span className="node-label">Start</span>
             <span className="node-text">{problem || "Problem from the board"}</span>

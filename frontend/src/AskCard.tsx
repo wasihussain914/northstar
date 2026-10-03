@@ -100,7 +100,7 @@ export function AskCard({ problem, strokes, result, voiceOn, lang }: Props) {
 
   return (
     <section className="card ask">
-      <span className="eyebrow">Ask North Star</span>
+      <span className="eyebrow">Ask Untangled</span>
       {log.length > 0 && (
         <ul className="ask-log">
           {log.map((x, i) => (
@@ -136,7 +136,7 @@ export function AskCard({ problem, strokes, result, voiceOn, lang }: Props) {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder={listening ? "Listening…" : "Why is line 2 wrong? What do I do next?"}
-          aria-label="Question for North Star"
+          aria-label="Question for Untangled"
         />
       </form>
     </section>

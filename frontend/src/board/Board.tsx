@@ -40,13 +40,15 @@ interface Props {
   onErase: (ids: number[]) => void;
   onSelectLine: (line: number) => void;
   onInteract: () => void;
+  /** Light or dark page; the canvas redraws its ink in the theme's colours. */
+  theme: "light" | "dark";
 }
 
 const ERASER_R = 14;
 /** Duration of the teacher-pen reveal animation in milliseconds. */
 const TEACHER_ANIM_MS = 1100;
 
-export function Board({ strokes, tool, markers, errorLine, selectedLine, teacherInk, onAdd, onErase, onSelectLine, onInteract }: Props) {
+export function Board({ strokes, tool, markers, errorLine, selectedLine, teacherInk, onAdd, onErase, onSelectLine, onInteract, theme }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(800);
@@ -88,22 +90,26 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
       canvas.height = pxH;
     }
     const ctx = canvas.getContext("2d")!;
+    // Ink and rule colours come from the stylesheet, so they follow light/dark mode.
+    const css = getComputedStyle(canvas);
+    const color = (name: string) => css.getPropertyValue(name).trim();
+    const ink = color("--ink");
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
     ctx.clearRect(0, 0, boardW, BOARD_H);
 
     if (errorLine) {
       const y = (errorLine - 1) * LINE_H;
-      ctx.fillStyle = "rgba(245, 158, 11, 0.10)";
+      ctx.fillStyle = color("--row-error");
       ctx.fillRect(0, y, boardW, LINE_H);
-      ctx.fillStyle = "rgba(245, 158, 11, 0.85)";
+      ctx.fillStyle = "rgba(255, 162, 76, 0.95)";
       ctx.fillRect(0, y + 6, 3, LINE_H - 12);
     }
     if (selectedLine && selectedLine !== errorLine) {
-      ctx.fillStyle = "rgba(59, 130, 246, 0.07)";
+      ctx.fillStyle = color("--row-selected");
       ctx.fillRect(0, (selectedLine - 1) * LINE_H, boardW, LINE_H);
     }
 
-    ctx.strokeStyle = "#d6deea";
+    ctx.strokeStyle = color("--rule");
     ctx.lineWidth = 1;
     for (let l = 1; l < LINES; l++) {
       const y = l * LINE_H + 0.5;
@@ -115,18 +121,18 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
 
     const hidden = erasing.current;
     for (const s of strokes) {
-      ctx.fillStyle = hidden?.has(s.id) ? "rgba(23, 27, 38, 0.18)" : "#171b26";
+      ctx.fillStyle = hidden?.has(s.id) ? color("--ink-ghost") : ink;
       ctx.fill(strokePath(s));
     }
     if (committing.current) {
       if (strokes.includes(committing.current)) committing.current = null;
       else {
-        ctx.fillStyle = "#171b26";
+        ctx.fillStyle = ink;
         ctx.fill(strokePath(committing.current));
       }
     }
     if (live.current && live.current.points.length) {
-      ctx.fillStyle = "#171b26";
+      ctx.fillStyle = ink;
       ctx.fill(outlinePath(live.current.points, live.current.pen, false));
     }
 
@@ -138,13 +144,13 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
 
     if (eraserPos.current) {
       const [x, y] = eraserPos.current;
-      ctx.strokeStyle = "rgba(23, 27, 38, 0.45)";
+      ctx.strokeStyle = color("--eraser");
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(x, y, ERASER_R, 0, Math.PI * 2);
       ctx.stroke();
     }
-  }, [strokes, width, boardW, scale, errorLine, selectedLine]);
+  }, [strokes, width, boardW, scale, errorLine, selectedLine, theme]);
 
   // Scheduled frames must use the newest props, not the ones from when they were scheduled.
   const drawRef = useRef(draw);
@@ -337,7 +343,6 @@ export function Board({ strokes, tool, markers, errorLine, selectedLine, teacher
                 aria-label={m ? `Line ${line}: ${describe(m)}` : `Line ${line}`}
                 title={m ? describe(m) : undefined}
               >
-                <span className="line-no">{line}</span>
                 {m && <MarkerIcon marker={m} />}
               </button>
             );
@@ -394,8 +399,7 @@ export function MarkerIcon({ marker }: { marker: Marker }) {
       return (
         <span className="marker error">
           <svg viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M10 2.5c-3.1 0-5.5 2.4-5.5 5.4 0 4 5.5 9.6 5.5 9.6s5.5-5.6 5.5-9.6c0-3-2.4-5.4-5.5-5.4z" fill="currentColor" />
-            <circle cx="10" cy="8" r="2.1" fill="#fff" />
+            <path d="M6.5 6.5l7 7M13.5 6.5l-7 7" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
           </svg>
         </span>
       );
