@@ -533,7 +533,7 @@ async def ask(req: AskRequest) -> dict:
         raise HTTPException(502, str(exc))
 
 
-_SAMPLES_PATH = Path(__file__).with_name("data") / "samples.json"
+_SAMPLES_PATH = Path(__file__).with_name("data") / "basic.json"
 
 
 @app.get("/api/samples")
@@ -541,7 +541,7 @@ async def get_samples():
     """Return the handwriting glyph dataset as JSON."""
     from fastapi.responses import FileResponse
     if not _SAMPLES_PATH.exists():
-        raise HTTPException(404, "samples.json not found")
+        raise HTTPException(404, "basic.json not found")
     return FileResponse(_SAMPLES_PATH, media_type="application/json")
 
 # Serve the built frontend (frontend/dist) when it exists, so one process can
