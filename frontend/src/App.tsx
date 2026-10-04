@@ -644,6 +644,22 @@ export default function App() {
             <RecalcBanner errorKey={tutor.errorKey} line={tutor.errorLine} />
             <Starburst fireKey={arrived ? problem : ""} />
             <FloatingMic problem={problem} strokes={strokes} result={tutor.result} voiceOn={voiceOn} lang={lang} />
+            {!arrived && (
+              <button
+                className={`autofill-btn glass${finishing ? " writing" : ""}`}
+                onClick={finishing ? stopFinish : finishIt}
+                title={finishing ? "Stop writing" : "Write the whole solution on the page, in your handwriting"}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  {finishing ? (
+                    <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" />
+                  ) : (
+                    <path d="M4 20l1.5-5L16 4.5a2.1 2.1 0 013 3L8.5 18 4 20zM13.5 7l3.5 3.5M9 13l2 2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  )}
+                </svg>
+                {finishing ? "Writing… tap to stop" : strokes.length ? "Finish the solution" : "Autofill the solution"}
+              </button>
+            )}
             <Mascot mood={pipMood(tutor, arrived)} voiceOn={voiceOn} besideDrawer={panelOpen} />
             <Board
               strokes={strokes}
@@ -692,7 +708,7 @@ export default function App() {
             trip={trip}
             lastInkLine={lastUsed || null}
             onHint={handleHint}
-            onFinish={strokes.length ? finishIt : undefined}
+            onFinish={finishIt}
             finishing={finishing}
             onNewTrip={advance}
             nextLabel={hasNextStop ? `Next stop · ${stopIndex + 2} of ${stops.length}` : "New problem"}

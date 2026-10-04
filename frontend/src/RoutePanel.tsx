@@ -95,12 +95,12 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
         </section>
       )}
 
-      {onFinish && errorLine == null && phase !== "empty" && !result?.arrived && (
+      {onFinish && errorLine == null && !result?.arrived && (
         <section className="card finish-card">
           <span className="eyebrow">Autopilot</span>
           <p className="next-hint">Written in your handwriting, straight onto the page. It still gets checked line by line.</p>
           <button className="btn wide" onClick={onFinish} disabled={finishing}>
-            {finishing ? "Writing…" : "Finish the rest for me"}
+            {finishing ? "Writing…" : phase === "empty" ? "Autofill the solution" : "Finish the rest for me"}
           </button>
         </section>
       )}
