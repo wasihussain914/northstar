@@ -22,6 +22,39 @@ import type { GlyphLibrary } from "../glyphs/types/handwriting";
 
 export type Tool = "pen" | "eraser";
 
+/** Circle the handwriting on a flagged line. */
+function drawMistakeMark(
+  ctx: CanvasRenderingContext2D,
+  strokes: Stroke[],
+  errorLine: number,
+  color: string,
+) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const s of strokes) {
+    if (lineOf(s) !== errorLine) continue;
+    minX = Math.min(minX, s.box.minX);
+    minY = Math.min(minY, s.box.minY);
+    maxX = Math.max(maxX, s.box.maxX);
+    maxY = Math.max(maxY, s.box.maxY);
+  }
+  if (!Number.isFinite(minX)) return;
+
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const rx = Math.max(22, (maxX - minX) / 2 + 16);
+  const ry = Math.max(16, (maxY - minY) / 2 + 12);
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, -0.05, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 export interface Marker {
   status: LineStatus | "checking";
   source?: "verified" | "ai";
@@ -196,6 +229,8 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
       ctx.fillStyle = ink;
       ctx.fill(outlinePath(live.current.points, live.current.pen, false));
     }
+
+    if (errorLine) drawMistakeMark(ctx, strokes, errorLine, teacher);
 
     // Red teacher annotation — rendered via personal glyph library
     const ts = teacherStateRef.current;
