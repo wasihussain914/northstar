@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { checkBoard, health } from "./api";
 import { Board, type TeacherInk, type Tool } from "./board/Board";
-import { LINES, lineOf, snapshot, type Stroke } from "./board/geometry";
+import { LINES, inkImage, lineOf, snapshot, type Stroke } from "./board/geometry";
+import { HomeworkSheet } from "./HomeworkSheet";
+import { sameProblem, useHomework, type HomeworkStep } from "./homework";
 // Font-rasterised handwriting: still the working path for typed steps, the
 // demo, and the dev helper until the vector glyph renderer can emit strokes.
 import { textToStrokes, typedTranscript } from "./board/handwriting";
@@ -155,6 +157,29 @@ export default function App() {
   const tutor = useTutor(strokes, problem, voiceOn, lang);
   const { trip, countHint } = useTrip(strokes, tutor);
 
+  // The homework document: solved problems get written up here for the PDF.
+  const homework = useHomework();
+  const [docOpen, setDocOpen] = useState(false);
+  const checkedSteps: HomeworkStep[] =
+    tutor.result?.lines
+      .filter((l) => l.status !== "skip")
+      .map((l) => ({ line: l.line, latex: l.latex, check: l.status === "ok" ? l.source : "unchecked" })) ?? [];
+  const filedCurrent = homework.doc.entries.some((e) => sameProblem(e.problem, problem));
+  const fileCurrent = useCallback(() => {
+    if (!checkedSteps.length) return;
+    homework.file({
+      problem,
+      latex: scan?.latex ?? "",
+      scan: scan?.image ?? null,
+      steps: checkedSteps,
+      ink: inkImage(strokes),
+      arrived: !!tutor.result?.arrived,
+      wrongTurns: trip.wrongTurns,
+      hintsUsed: trip.hintsUsed,
+      durationMs: trip.durationMs,
+    });
+  }, [checkedSteps, homework.file, problem, scan, strokes, tutor.result?.arrived, trip]);
+
   // Red teacher pen. Not part of undo, and not sent to the tutor.
   // Clears when the wrong turn changes, the problem changes, the board is
   // cleared, or the student edits the line the note sits on.
@@ -194,6 +219,14 @@ export default function App() {
   useEffect(() => {
     if (arrived) setPanelOpen(true);
   }, [arrived]);
+
+  // Arriving files the solution in the homework (re-arriving after an edit
+  // updates it). The demo's solves aren't your homework, so they stay out.
+  const fileRef = useRef(fileCurrent);
+  fileRef.current = fileCurrent;
+  useEffect(() => {
+    if (arrived && !demoRunning) fileRef.current();
+  }, [arrived, tutor.result]);
 
   useEffect(() => {
     health().then((h) => {
@@ -387,7 +420,7 @@ export default function App() {
   };
 
   return (
-    <div className={`app${panelOpen ? " panel-open" : ""}${arrived ? " solved" : ""}`}>
+    <div className={`app${panelOpen ? " panel-open" : ""}${arrived ? " solved" : ""}${docOpen ? " doc-open" : ""}`}>
       <header className="topbar">
         <div className="nav-pill glass">
           <UntangledMark className="brand-star" />
@@ -447,6 +480,17 @@ export default function App() {
           </button>
           <button className="btn primary check-now" onClick={tutor.checkNow} disabled={!strokes.length || tutor.phase === "checking"}>
             Check now
+          </button>
+          <button
+            className={`btn glass hw-btn${filedCurrent && arrived ? " filed" : ""}`}
+            onClick={() => setDocOpen(true)}
+            title="Your solved problems, written up. Export as PDF."
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 3h8l4 4v14H6z M14 3v4h4 M9 12h6 M9 16h6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round" />
+            </svg>
+            <span className="hw-btn-text">Homework</span>
+            {homework.doc.entries.length > 0 && <span className="hw-count">{homework.doc.entries.length}</span>}
           </button>
         </div>
       </header>
@@ -544,6 +588,16 @@ export default function App() {
             onHint={handleHint}
             onNewTrip={advance}
             nextLabel={hasNextStop ? `Next stop · ${stopIndex + 2} of ${stops.length}` : "New problem"}
+            docNote={
+              filedCurrent ? (
+                <button className="hw-link" onClick={() => setDocOpen(true)}>
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M5 10l3.5 3.5L15 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Filed in your homework · problem {homework.doc.entries.findIndex((e) => sameProblem(e.problem, problem)) + 1}
+                </button>
+              ) : null
+            }
           >
             <AskCard problem={problem} strokes={strokes} result={tutor.result} voiceOn={voiceOn} lang={lang} />
 
@@ -601,6 +655,15 @@ export default function App() {
       </main>
 
       {scanning && <ProblemScanner onUse={useScan} onTrip={useTripScan} onClose={() => setScanning(false)} />}
+      {docOpen && (
+        <HomeworkSheet
+          homework={homework}
+          canFileCurrent={checkedSteps.length > 0}
+          filedCurrent={filedCurrent}
+          onFileCurrent={fileCurrent}
+          onClose={() => setDocOpen(false)}
+        />
+      )}
     </div>
   );
 }
