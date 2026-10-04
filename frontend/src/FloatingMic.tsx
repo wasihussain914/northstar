@@ -94,8 +94,25 @@ export function FloatingMic({ problem, strokes, result, voiceOn, lang }: Props) 
       else setState("idle");
     };
     recognition.current = rec;
-    rec.start();
-    setState("listening");
+    // iPad Safari can hang without firing onend/onerror: stop after 20s so
+    // "listening" never sticks, and treat a failed start as mic-unavailable.
+    const watchdog = window.setTimeout(() => {
+      try { rec.stop(); } catch { /* already stopped */ }
+      setState("idle");
+    }, 20000);
+    const done = rec.onend;
+    rec.onend = () => {
+      window.clearTimeout(watchdog);
+      done?.();
+    };
+    try {
+      rec.start();
+      setState("listening");
+    } catch {
+      window.clearTimeout(watchdog);
+      setState("idle");
+      caption("The mic isn't available here — write your question on the page instead.");
+    }
   };
 
   if (!RecognitionCtor) return null;

@@ -94,8 +94,24 @@ export function AskCard({ problem, strokes, result, voiceOn, lang }: Props) {
       if (heard.current.trim()) ask(heard.current);
     };
     recognition.current = rec;
-    rec.start();
-    setListening(true);
+    // iPad Safari can hang without firing onend/onerror: stop after 20s so
+    // "Listening…" never sticks, and treat a failed start as mic-unavailable.
+    const watchdog = window.setTimeout(() => {
+      try { rec.stop(); } catch { /* already stopped */ }
+      setListening(false);
+    }, 20000);
+    const done = rec.onend;
+    rec.onend = () => {
+      window.clearTimeout(watchdog);
+      done?.();
+    };
+    try {
+      rec.start();
+      setListening(true);
+    } catch {
+      window.clearTimeout(watchdog);
+      setListening(false);
+    }
   };
 
   return (

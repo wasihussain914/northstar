@@ -140,6 +140,17 @@ body {
   letter-spacing: 0.01em;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
+  /* It's an app, not a document: long-press must not select the chrome
+     (markers, gutter, buttons) or pop the iOS copy/look-up callout. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 button,
