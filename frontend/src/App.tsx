@@ -11,6 +11,7 @@ import { AskCard } from "./AskCard";
 import { DEMOS, runDemo } from "./demo";
 import { DestinationCard } from "./DestinationCard";
 import { RecalcBanner, Starburst } from "./Flashes";
+import { FloatingMic } from "./FloatingMic";
 import { PlanCard } from "./PlanCard";
 import { ProblemScanner, type ScannedProblem } from "./ProblemScanner";
 import { RoutePanel } from "./RoutePanel";
@@ -545,6 +546,7 @@ export default function App() {
           <div className="board-stage">
             <RecalcBanner errorKey={tutor.errorKey} line={tutor.errorLine} />
             <Starburst fireKey={arrived ? problem : ""} />
+            <FloatingMic problem={problem} strokes={strokes} result={tutor.result} voiceOn={voiceOn} lang={lang} />
             <Mascot mood={pipMood(tutor, arrived)} voiceOn={voiceOn} besideDrawer={panelOpen} />
             <Board
               strokes={strokes}
