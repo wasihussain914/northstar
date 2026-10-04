@@ -188,22 +188,6 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
       ctx.fillStyle = color("--row-selected");
       ctx.fillRect(0, (selectedLine - 1) * LINE_H, boardW, LINE_H);
     }
-    if (promptStart && errorLine !== 1) {
-      ctx.fillStyle = color("--row-prompt");
-      ctx.fillRect(0, 0, boardW, LINE_H);
-      ctx.fillStyle = color("--prompt-bar");
-      ctx.fillRect(0, 6, 3, LINE_H - 12);
-      ctx.font = '30px "Bradley Hand", "Noteworthy", "Chalkboard SE", cursive';
-      ctx.textBaseline = "middle";
-      // Leave a little room on the right so the hint never runs under the tools.
-      const room = boardW - 36 - 176 / Math.max(scale, 0.01);
-      const phrase = ["Write your first step here", "First step"].find((p) => ctx.measureText(p).width <= room);
-      if (phrase) {
-        ctx.fillStyle = color("--prompt-text");
-        ctx.fillText(phrase, 28, LINE_H * 0.5);
-      }
-      ctx.textBaseline = "alphabetic";
-    }
 
     ctx.strokeStyle = color("--rule");
     ctx.lineWidth = 1;
@@ -552,7 +536,7 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
             return (
               <button
                 key={line}
-                className={`gutter-row${selectedLine === line ? " selected" : ""}${promptStart && line === 1 ? " prompt" : ""}${m ? ` has-${m.status}` : ""}`}
+                className={`gutter-row${selectedLine === line ? " selected" : ""}${m ? ` has-${m.status}` : ""}`}
                 style={{ height: LINE_H * scale }}
                 onClick={() => m && onSelectLine(line)}
                 disabled={!m}
