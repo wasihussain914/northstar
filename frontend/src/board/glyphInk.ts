@@ -37,7 +37,6 @@ const SMALL: Record<string, { h: number; mid: number }> = {
   "±": { h: 0.7, mid: 0.4 },
   "^": { h: 0.3, mid: 0.85 },
   "'": { h: 0.25, mid: 0.85 },
-  "-": { h: 0.12, mid: 0.42 },
 };
 
 /** A stable seed per line so the same text always lays out the same way. */

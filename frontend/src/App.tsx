@@ -470,7 +470,11 @@ export default function App() {
       const { steps } = await finishWork({ problem, lines, lang });
       if (ctrl.signal.aborted) return;
       const todo = steps.slice(0, LINES - start + 1).map((text, i) => ({ line: start + i, text }));
-      await writeLines(todo, { add: (s) => dispatch({ type: "addMany", strokes: s }), strokesFor: writeRef.current }, ctrl.signal);
+      await writeLines(todo, {
+        add: (s) => dispatch({ type: "addMany", strokes: s }),
+        strokesFor: writeRef.current,
+        hold: (on) => tutorRef.current.hold(on),
+      }, ctrl.signal);
     } catch (err) {
       if (!(err instanceof DOMException)) caption(err instanceof Error ? err.message : "Couldn't finish that one.");
     } finally {
@@ -499,6 +503,7 @@ export default function App() {
       clear: () => dispatch({ type: "clear" }),
       add: (s) => dispatch({ type: "addMany", strokes: s }),
       strokesFor: writeRef.current,
+      hold: (on) => tutorRef.current.hold(on),
       eraseLine: (line) =>
         dispatch({ type: "erase", ids: strokesRef.current.filter((s) => lineOf(s) === line).map((s) => s.id) }),
       state: () => {

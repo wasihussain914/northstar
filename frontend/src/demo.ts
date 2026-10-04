@@ -91,6 +91,8 @@ export interface DemoHooks {
   state: () => { errorLine: number | null; arrived: boolean; ready: boolean };
   /** How to turn a line of text into ink (the loaded handwriting, or the font). */
   strokesFor?: (text: string, line: number) => Stroke[];
+  /** Pause the tutor's checking while a line is mid-write, so it reads whole lines. */
+  hold?: (on: boolean) => void;
 }
 
 const WRITE_MS = 1100; // time to "write" one line
@@ -107,9 +109,14 @@ async function writeLine(text: string, line: number, hooks: DemoHooks, sleep: Sl
   const strokes = [first, ...rest.sort((a, b) => a.box.minX - b.box.minX)];
   const chunks = 14;
   const per = Math.ceil(strokes.length / chunks);
-  for (let i = 0; i < strokes.length; i += per) {
-    hooks.add(strokes.slice(i, i + per));
-    await sleep(WRITE_MS / chunks);
+  hooks.hold?.(true);
+  try {
+    for (let i = 0; i < strokes.length; i += per) {
+      hooks.add(strokes.slice(i, i + per));
+      await sleep(WRITE_MS / chunks);
+    }
+  } finally {
+    hooks.hold?.(false);
   }
   await sleep(350);
 }
@@ -118,7 +125,7 @@ async function writeLine(text: string, line: number, hooks: DemoHooks, sleep: Sl
  * Write several lines one after another, the way the tutor finishes a solve.
  * Resolves when done; rejects with AbortError if the student takes over.
  */
-export async function writeLines(lines: { line: number; text: string }[], hooks: Pick<DemoHooks, "add" | "strokesFor">, signal: AbortSignal) {
+export async function writeLines(lines: { line: number; text: string }[], hooks: Pick<DemoHooks, "add" | "strokesFor" | "hold">, signal: AbortSignal) {
   const sleep: Sleep = (ms) =>
     new Promise<void>((resolve, reject) => {
       const t = window.setTimeout(resolve, ms);
