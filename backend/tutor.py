@@ -34,8 +34,9 @@ MODEL = os.environ.get("NORTHSTAR_MODEL", "claude-sonnet-5-5")
 # Flash is the live-feedback counterpart to Sonnet: vision plus structured JSON,
 # without a long thinking pass.
 GEMINI_MODEL = "gemini-3.8-flash"
-# Grok 4 is xAI's multimodal flagship: vision plus strict structured JSON.
-XAI_MODEL = "grok-4"
+# Non-reasoning Grok still reads the photo. SymPy checks the math, so the
+# thinking pass only adds latency on a live board.
+XAI_MODEL = "grok-4.20-non-reasoning"
 
 _client: anthropic.AsyncAnthropic | None = None
 _gemini: genai.Client | None = None
