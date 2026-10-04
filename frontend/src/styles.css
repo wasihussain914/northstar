@@ -1833,13 +1833,50 @@ canvas.ink.tool-scroll:active {
 
 /* ---------- Smaller screens ---------- */
 
-@media (max-width: 960px) {
-  .destination-card {
-    flex-wrap: wrap;
-  }
+/* iPad landscape: trim labels so the three top clusters never touch. */
+@media (max-width: 1365px) {
   .nav-problem,
   .nav-sep {
     display: none;
+  }
+  .hw-btn-text {
+    display: none;
+  }
+  .tool-pill .icon-btn {
+    width: 40px;
+  }
+}
+
+/* iPad portrait and below: the tool pill gets its own row under the bar. */
+@media (max-width: 1120px) {
+  .topbar {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "nav . actions"
+      "tools tools tools";
+    row-gap: 10px;
+  }
+  .nav-pill {
+    grid-area: nav;
+  }
+  .topbar-actions {
+    grid-area: actions;
+  }
+  .tool-pill {
+    grid-area: tools;
+    justify-self: center;
+  }
+  .board-area {
+    padding-top: calc(148px + env(safe-area-inset-top));
+  }
+  .app:not(.panel-open) .board-area {
+    padding-top: calc(210px + env(safe-area-inset-top));
+  }
+}
+
+@media (max-width: 960px) {
+  .destination-card {
+    flex-wrap: wrap;
   }
 }
 

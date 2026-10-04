@@ -157,10 +157,25 @@ function inkFor(text: string, library: GlyphLibrary, x0: number, baseline: numbe
  * as pen strokes the board treats like any other ink. Characters the
  * dataset doesn't have fall back to the handwriting font.
  */
+/** The checker's dialect, written the way a human writes it: "int v du" is ∫v du. */
+export function displayMath(text: string): string {
+  return text
+    .replace(/\bintegrate\b/gi, "∫")
+    .replace(/\bint\b/g, "∫")
+    .replace(/\bsqrt\b/g, "√")
+    .replace(/\boo\b/g, "∞")
+    .replace(/<=/g, "≤")
+    .replace(/>=/g, "≥")
+    .replace(/!=/g, "≠")
+    .replace(/∫\s+/g, "∫");
+}
+
 export function glyphStrokes(text: string, line: number, library: GlyphLibrary, x0 = 28, remember = true): Stroke[] {
   const top = (line - 1) * LINE_H;
   const baseline = top + LINE_H * 0.74;
-  const out = inkFor(text, library, x0, baseline, FONT_H, seedOf(text, line), line);
+  const shown = displayMath(text);
+  const out = inkFor(shown, library, x0, baseline, FONT_H, seedOf(shown, line), line);
+  // The tag keeps the original dialect, so the server reads the line verbatim.
   if (remember && out.length) rememberText(out, text);
   return out;
 }

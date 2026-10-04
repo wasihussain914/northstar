@@ -264,11 +264,11 @@ export default function App() {
     });
   }, []);
 
-  // Warm the GPS's stock phrases so "Back on route" doesn't wait on a voice fetch.
+  // Warm the GPS's stock phrases so arrival and nudges don't wait on a voice fetch.
   useEffect(() => {
     if (!serverVoice || !voiceOn) return;
     const p = PHRASES[lang];
-    prefetchSpeech([p.arrived, p.backOnRoute, ...Array.from({ length: 8 }, (_, i) => p.recalculating(i + 1))]);
+    prefetchSpeech([p.arrived, ...Array.from({ length: 8 }, (_, i) => p.recalculating(i + 1))]);
   }, [serverVoice, voiceOn, lang]);
 
   // Dev helper: window.northstar.write(2, "2x - 6 + 4 = 10") writes a line in a handwriting font.
