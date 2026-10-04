@@ -112,3 +112,17 @@ def test_unparseable_typed_text_falls_back_to_the_model(monkeypatch):
     monkeypatch.setattr(tutor, "read_board", fake_read)
     run_check(monkeypatch, {1: "hello there this is prose"}, [1])
     assert called.get("read")
+
+
+def test_tiny_placeholder_images_become_a_readable_blank_page():
+    import base64
+    from main import decode_png, readable_png
+    tiny = base64.b64encode(bytes.fromhex(
+        "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+        "0000000d49444154789c626060f80f00000500010d0a2db40000000049454e44ae426082")).decode()
+    b64, raw = decode_png(tiny)
+    swapped = readable_png(b64, raw)
+    assert swapped != b64 and len(swapped) > len(b64)
+    # Real-size boards pass through untouched.
+    big_b64, big_raw = decode_png(swapped)
+    assert readable_png(big_b64, big_raw) == big_b64
