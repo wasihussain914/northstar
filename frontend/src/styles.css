@@ -2428,3 +2428,472 @@ canvas.ink.tool-eraser {
   color: inherit;
   transition: color 0.12s ease;
 }
+
+/* ---------- Homework: the solved problems, written up on paper for the PDF ---------- */
+
+.hw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px 0 12px;
+}
+
+.hw-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.hw-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  background: var(--inverse-bg);
+  color: var(--inverse-fg);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.hw-btn.filed .hw-count {
+  background: #c7f36b;
+  color: #161616;
+}
+
+.hw-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cobalt-text);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.hw-link svg {
+  width: 16px;
+  height: 16px;
+}
+
+.hw-link:hover {
+  text-decoration: underline;
+}
+
+.hw-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: start center;
+  padding: 18px;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.hw-sheet {
+  width: min(820px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 28px;
+  background: var(--glass-strong);
+  box-shadow: inset 0 0 0 1px var(--glass-edge), 0 30px 80px rgba(0, 0, 0, 0.5);
+  animation: rise 0.3s var(--ease);
+}
+
+.hw-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hw-toolbar h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+
+.hw-toolbar-sub {
+  display: block;
+  font-size: 13px;
+  color: var(--faint);
+}
+
+.hw-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hw-file-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--caution-soft);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.hw-file-bar .btn.small {
+  margin: 0;
+}
+
+/* The paper itself is always white with dark ink, on screen and in print. */
+.hw-paper {
+  padding: 48px 56px 40px;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #161616;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08), 0 12px 40px rgba(0, 0, 0, 0.25);
+  font-size: 15.5px;
+  line-height: 1.55;
+  color-scheme: light;
+}
+
+.hw-head {
+  padding-bottom: 18px;
+  margin-bottom: 26px;
+  border-bottom: 1.5px solid #161616;
+}
+
+.hw-field {
+  display: block;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  border-bottom: 1px dashed transparent;
+  background: none;
+  color: inherit;
+  font: inherit;
+  outline: none;
+}
+
+.hw-field:hover,
+.hw-field:focus {
+  border-bottom-color: rgba(0, 0, 0, 0.3);
+}
+
+.hw-field::placeholder {
+  color: #9a9a9a;
+}
+
+.hw-title {
+  font-family: var(--display);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin-bottom: 8px;
+}
+
+.hw-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 16px;
+  align-items: center;
+  color: #474747;
+  font-size: 14px;
+}
+
+.hw-meta .hw-field {
+  width: auto;
+}
+
+.hw-date {
+  white-space: nowrap;
+}
+
+.hw-empty {
+  padding: 40px 0 30px;
+  text-align: center;
+  color: #474747;
+}
+
+.hw-empty p {
+  margin: 0 auto;
+  max-width: 420px;
+  font-family: var(--display);
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.hw-empty-sub {
+  margin-top: 10px !important;
+  font-family: var(--font) !important;
+  font-size: 14px !important;
+  color: #8a8a8a;
+}
+
+.hw-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.hw-problem {
+  position: relative;
+  break-inside: avoid;
+}
+
+.hw-problem-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.hw-n {
+  flex: none;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 17px;
+  min-width: 26px;
+}
+
+.hw-q {
+  flex: 1;
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.hw-q .math {
+  font-size: 1.05em;
+}
+
+.hw-verb {
+  margin-right: 8px;
+}
+
+.hw-problem-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.hw-problem:hover .hw-problem-actions,
+.hw-problem:focus-within .hw-problem-actions {
+  opacity: 1;
+}
+
+.hw-problem-actions .icon-btn {
+  width: 30px;
+  height: 30px;
+  color: #474747;
+}
+
+.hw-problem-actions .icon-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.hw-scan {
+  display: block;
+  max-width: 100%;
+  max-height: 120px;
+  margin: 8px 0 4px 36px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.hw-steps {
+  list-style: none;
+  margin: 10px 0 0 36px;
+  padding: 0 0 0 16px;
+  border-left: 2px solid rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hw-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+}
+
+.hw-step-math .math {
+  font-size: 1.08em;
+}
+
+.hw-step.final .hw-step-math {
+  display: inline-block;
+  padding: 3px 12px;
+  border: 1.5px solid #161616;
+  border-radius: 4px;
+}
+
+.hw-check {
+  color: #3c8a2e;
+  font-size: 14px;
+}
+
+.hw-problem.unfinished .hw-steps {
+  border-left-color: var(--amber);
+}
+
+.hw-unfinished {
+  margin: 8px 0 0 52px;
+  font-size: 13px;
+  color: var(--amber-text);
+}
+
+.hw-ink {
+  display: block;
+  max-width: calc(100% - 36px);
+  max-height: 260px;
+  margin: 14px 0 0 36px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.hw-note {
+  display: block;
+  width: calc(100% - 36px);
+  margin: 10px 0 0 36px;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px dashed transparent;
+  background: none;
+  color: #161616;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  resize: none;
+  overflow: hidden;
+  outline: none;
+}
+
+.hw-note:hover,
+.hw-note:focus {
+  border-bottom-color: rgba(0, 0, 0, 0.3);
+}
+
+.hw-note::placeholder {
+  color: #b0b0b0;
+}
+
+.hw-foot {
+  margin-top: 34px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+  font-size: 12.5px;
+  color: #8a8a8a;
+}
+
+@media (max-width: 700px) {
+  .hw-backdrop {
+    padding: 10px;
+  }
+  .hw-sheet {
+    padding: 12px;
+    border-radius: 20px;
+  }
+  .hw-paper {
+    padding: 26px 20px 24px;
+  }
+  .hw-meta {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .hw-btn-text {
+    display: none;
+  }
+  .hw-btn {
+    padding: 0 12px;
+  }
+  .hw-problem-actions {
+    opacity: 1;
+  }
+}
+
+/* Printing the homework: only the paper, white, one problem never split across pages. */
+@media print {
+  @page {
+    margin: 18mm 16mm;
+  }
+  html,
+  body,
+  #root {
+    height: auto;
+    background: #fff;
+  }
+  .app.doc-open {
+    height: auto;
+    display: block;
+    background: #fff;
+  }
+  .app.doc-open > :not(.hw-backdrop) {
+    display: none !important;
+  }
+  .hw-backdrop {
+    position: static;
+    inset: auto;
+    display: block;
+    padding: 0;
+    overflow: visible;
+    background: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .hw-sheet {
+    width: auto;
+    padding: 0;
+    gap: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    animation: none;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .hw-paper {
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+    font-size: 12.5pt;
+  }
+  .hw-field,
+  .hw-note {
+    border-bottom-color: transparent !important;
+  }
+  .hw-field:placeholder-shown,
+  .hw-note:placeholder-shown {
+    display: none;
+  }
+  .hw-problem-actions {
+    display: none;
+  }
+  .hw-ink,
+  .hw-scan {
+    max-height: 70mm;
+    box-shadow: none;
+    border: 1px solid #ddd;
+  }
+  .hw-check {
+    color: #3c8a2e;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

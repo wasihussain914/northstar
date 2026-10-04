@@ -26,10 +26,12 @@ interface Props {
   nextLabel?: string;
   /** Detour-practice card, shown with the trip summary. */
   practiceCard?: React.ReactNode;
+  /** Where the solution went (the homework doc), shown on the trip summary. */
+  docNote?: React.ReactNode;
   children?: React.ReactNode;
 }
 
-export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, lastInkLine, onHint, onNewTrip, nextLabel, practiceCard, children }: Props) {
+export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, lastInkLine, onHint, onNewTrip, nextLabel, practiceCard, docNote, children }: Props) {
   const { result, errorLine, errorKey, phase, failure } = tutor;
   const [hintsShown, setHintsShown] = useState(0);
   const [showNext, setShowNext] = useState(false);
@@ -61,7 +63,7 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
         onRetry={tutor.checkNow}
       />
 
-      {trip.durationMs != null && <TripSummary trip={trip} onNewTrip={onNewTrip} nextLabel={nextLabel ?? "New problem"} />}
+      {trip.durationMs != null && <TripSummary trip={trip} onNewTrip={onNewTrip} nextLabel={nextLabel ?? "New problem"} docNote={docNote} />}
       {trip.durationMs != null && practiceCard}
 
       {errorLine != null && result && result.hints.length > 0 && (
@@ -134,7 +136,7 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
   );
 }
 
-function TripSummary({ trip, onNewTrip, nextLabel }: { trip: Trip; onNewTrip: () => void; nextLabel: string }) {
+function TripSummary({ trip, onNewTrip, nextLabel, docNote }: { trip: Trip; onNewTrip: () => void; nextLabel: string; docNote?: React.ReactNode }) {
   const secs = Math.round((trip.durationMs ?? 0) / 1000);
   const time = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`;
   const recap =
@@ -163,6 +165,7 @@ function TripSummary({ trip, onNewTrip, nextLabel }: { trip: Trip; onNewTrip: ()
           <dd>{time}</dd>
         </div>
       </dl>
+      {docNote}
       <button className="btn primary wide" onClick={onNewTrip}>
         {nextLabel}
       </button>
