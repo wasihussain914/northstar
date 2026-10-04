@@ -113,9 +113,12 @@ class CheckRequest(BaseModel):
     transcript: dict[int, str] | None = Field(default=None, max_length=60)
     # Language for student-facing guidance (see tutor.LANGUAGES).
     lang: str = Field(default="en", max_length=8)
+    # Lines whose written-on-the-board question was already answered, so a
+    # question isn't re-answered on every subsequent check while it stays inked.
+    answered: list[int] = Field(default_factory=list, max_length=60)
 
 
-SKIP_KINDS = {"crossed_out", "not_math"}
+SKIP_KINDS = {"crossed_out", "not_math", "question"}
 
 
 def merge(board: dict, sym: dict | None) -> list[dict]:
@@ -224,6 +227,21 @@ async def check(req: CheckRequest) -> dict:
             spoken = f"Recalculating. Take another look at line {first_error}."
             hint_ink = ["compare with above", "check each term", ""]
 
+    # A question written on the board ("what do i do?") gets answered out
+    # loud, once: the client lists lines it already heard answers for.
+    board_question = None
+    asked = next((l for l in lines if l["kind"] == "question" and l["latex"].strip()
+                  and l["line"] not in req.answered), None)
+    if asked is not None:
+        context = "; ".join(f"line {l['line']} ({l['status']}): {l['latex']}"
+                            for l in lines if l["kind"] != "question" and l["latex"])
+        try:
+            answer = await (fake_tutor if FAKE_VISION else tutor).ask(
+                req.problem, asked["latex"], None, req.transcript, context, req.lang)
+            board_question = {"line": asked["line"], "question": asked["latex"], "answer": answer["answer"]}
+        except tutor.TutorError:
+            board_question = None
+
     has_work = any(l["status"] not in ("skip", "pending") for l in lines)
     arrived = first_error is None and has_work and (
         bool(sym and sym.get("arrived")) or (not board.get("target_variable") and board.get("eta_steps", 1) == 0))
@@ -241,6 +259,7 @@ async def check(req: CheckRequest) -> dict:
         "route_note": board.get("route_note", ""),
         "arrived": arrived,
         "verified": sym is not None,
+        "board_question": board_question,
         "timing_ms": {"read": round(read_ms), "total": round((time.perf_counter() - started) * 1000)},
     }
 

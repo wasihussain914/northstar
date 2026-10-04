@@ -2443,3 +2443,14 @@ canvas.ink.tool-eraser {
   color: inherit;
   transition: color 0.12s ease;
 }
+
+/* A question written on the paper, answered. */
+.asked-q {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.asked-a {
+  margin: 0;
+}

@@ -46,6 +46,9 @@ def _problem_math(problem: str) -> str:
 
 
 def _kind(text: str) -> str:
+    lower = text.lower()
+    if "?" in text or lower.startswith(("help", "what", "how", "why", "im not sure", "i'm not sure")):
+        return "question"
     if any(op in text for op in ("<", ">", "≤", "≥")):
         return "inequality"
     return "equation" if "=" in text else "expression"

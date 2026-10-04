@@ -47,3 +47,10 @@ def test_claim_lines_are_judged_by_the_model_not_skipped():
     board = {"lines": [line(1, "", kind="claim", ai="ok"), line(2, "", kind="claim", ai="error")]}
     out = {l["line"]: l["status"] for l in merge(board, None)}
     assert out == {1: "ok", 2: "error"}
+
+
+def test_questions_written_on_the_board_are_skipped_not_judged():
+    from main import SKIP_KINDS
+    assert "question" in SKIP_KINDS
+    board = {"lines": [line(1, "", kind="question", ai="unclear")]}
+    assert merge(board, None)[0]["status"] == "skip"
