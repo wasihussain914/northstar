@@ -1,187 +1,101 @@
-# ✦ Untangled
+# Untangled
 
-**A GPS for solving math.** Work a problem on a digital whiteboard and Untangled follows along. It never solves
-the problem for you. When you take a wrong turn it marks the exact line, says *"Recalculating"* out loud, and
-gives you hints that get more specific each time you ask.
+**A personalized AI tutor that works alongside you as you solve math.** Untangled watches your whiteboard, catches mistakes as they happen, annotates the step that went off track, and guides you toward understanding instead of jumping straight to the answer.
 
-Built for Cornell Hacks 2026 (theme: **Navigation**).
+Built for Cornell Hacks 2026 around the theme of **Navigation**.
 
-## How it works
+## About
 
-```
- 📷 scan homework (photo or PDF) ──▶ box the problem ──▶ Claude reads it
-                                   │            = your destination
-                                   ▼
- you write ──▶ new line? ~0.35s / pause ~1.2s ──▶ board snapshot (lines labeled 1, 2, 3…)
-                                   │
-                                   ▼
-                     Claude Sonnet 5.5 (vision) reads each line 
-                     → LaTeX + SymPy syntax
-                                   │
-                                   ▼
-                     SymPy checks each step against the one before
-                     (equivalent? lost a root? flipped inequality?)
-                                   │
-                     wrong turn? → a second, smaller Claude call
-                                   writes the hint ladder
-                                   ▼
-          gutter markers ✓ 📍 ⚠ · route panel · GPS voice · hint ladder
-```
+Most AI study tools make learning a back-and-forth chat: ask a question, get a response, and repeat. Others reveal a complete solution all at once. Untangled takes a more hands-on approach. It follows your work on a digital whiteboard and acts like a teacher beside you, offering timely feedback while you remain in control of solving the problem.
 
-- **Claude reads, SymPy proves.** Claude transcribes the handwriting; when a step is wrong, a second, smaller
-  Claude call writes the hints. Whether a step is
-  correct is decided by SymPy where it can: for equations it compares solution sets, for expressions it checks
-  that they're equal (including trig and log identities). The same checker also covers calculus (derivatives,
-  integrals, limits, gradients), ODEs and PDEs (by plugging a proposed solution back in), linear algebra
-  (determinants, inverses, row reduction), sums, number theory (Euclid, congruences, modular inverses),
-  algebraic and induction proofs, the pigeonhole principle, and balancing a chemical equation. Physics that
-  is a differential equation, such as constant acceleration, uses the ODE check. Steps SymPy can't decide fall
-  back to Claude's judgment and are labeled "AI-checked" instead of "verified".
-- **First wrong turn, not every wrong line.** A line that correctly carries an earlier mistake forward is still
-  on route. Only the line where the mistake was made gets the 📍.
-- **The voice speaks up like a GPS.** It stays quiet while you work. It speaks once you've written past the
-  wrong line (you "missed the turn"), or after you've been idle on it for 7 seconds. It also says "Back on route"
-  and "You have arrived."
-- **Hint ladder:** a nudge toward where to look → the rule that was misapplied → the corrected line. It never
-  gives the final answer.
+## Inspiration
 
-Also:
-- **Scan your homework.** Take a photo of the worksheet (or open a photo/PDF), drag a box around the problem
-  you're on, and Claude reads it into the destination card — the crop of your actual homework stays pinned above
-  the paper while you work. Multi-page PDFs have page arrows; editing the transcription by hand is one tap.
-- **Trips with stops.** Scan a whole worksheet and every problem Claude finds becomes a stop on one trip:
-  itinerary dots on the destination card, "Next stop · 2 of 4" when you arrive, jump between stops by tapping
-  the dots.
-- **Six languages.** Pick Español, Français, 中文, हिन्दी or বাংলা and the guidance — hints, spoken nudges,
-  encouragement, Ask answers, the GPS voice itself — switches to that language. The math and the checking don't
-  change (Accessibility track: navigation "regardless of language").
-- **Checkpoints.** The moment you start a new line, the line you just finished is checked (~0.35s), so wrong
-  turns surface while your pen is still moving. A ~1.2s pause checks everything else.
-- **Ask Untangled.** Tap the mic (or type) to ask "why is line 2 wrong?". Claude sees the board and the last
-  check, and answers out loud in at most three sentences, never with the final answer.
-- **Trip summary** on arrival: steps, wrong turns (stale lines after a fix don't count), hints used, time.
-- **▶ Demo** plays a scripted solve in animated handwriting: a deliberate mistake, the catch, the fix, the arrival.
-  Use it to present without a stylus. Touching the board stops it.
-- **Any screen size.** Narrow screens show the board scaled down instead of cutting lines off.
-- **Type a step** (`T`) for anyone who can't or would rather not use a pen. The line appears on the board in
-  handwriting, and the server gets the exact text, so nothing is lost in reading it back. Select a line in the
-  route list to replace it.
-- **Read aloud** turns your whole route into spoken math ("Line 2, wrong turn: two x plus two equals ten").
+We wanted an AI tutor that could interact with a student's actual problem-solving process. A teacher does more than give the answer: they notice where a student took a wrong turn, point to the relevant line, and offer just enough guidance to help the student continue. We set out to bring that experience to a whiteboard app, with a friendly mascot that encourages students and is ready to answer questions.
 
-## Run it
+## What it does
 
-You'll need Python 3.11+, [uv](https://docs.astral.sh/uv/), Node 20+, and either an Anthropic API key or a Gemini (Google AI) API key.
+- **Follows your work in real time.** Write with a mouse, finger, or stylus. Untangled checks a newly completed line quickly and checks again after a pause, so feedback can arrive while you are still working.
+- **Marks the first wrong turn.** The route panel points to the line where reasoning first went off track; later lines that carry the same mistake forward are not repeatedly flagged.
+- **Guides instead of giving away the solution.** Ask for a hint to get a ladder of guidance, from a nudge to a more direct explanation. Ask Untangled a question by typing or using the microphone; its response uses the current board context and stays concise.
+- **Checks math with symbolic tools.** SymPy verifies supported steps when it can. When a step cannot be decided symbolically, the app can use an AI judgment and label it accordingly.
+- **Scans homework.** Import a photo or PDF, select a problem, and use it as the destination for your work. A worksheet can be turned into a sequence of problems.
+- **Speaks feedback aloud.** The GPS-inspired voice stays quiet while you work, then calls out a missed turn or lets you know when you are back on route. Browser speech synthesis works by default; an optional ElevenLabs key enables a neural voice.
+- **Supports different ways of working.** Type a step, use the demo to present an example, review a trip summary, or choose from six interface and guidance languages.
 
-```bash
-cp backend/.env.example backend/.env     # then put your key in backend/.env
-cp frontend/.env.example frontend/.env   # leave VITE_BACKEND_IP empty for localhost
-./dev.sh                                 # API on :8000, app on :5173
-```
+## How we built it
 
-On Windows PowerShell, skip `./dev.sh` and start the two processes yourself (see [Phone or iPad](#phone-or-ipad-same-wifi)).
+Untangled separates reading the board from checking the mathematics:
 
-Set `ANTHROPIC_API_KEY` to use Claude, or `GEMINI_API_KEY` to use Gemini. If both keys are set, Claude is used unless `NORTHSTAR_PROVIDER=gemini`.
+1. The React whiteboard groups strokes into lines and sends a labeled snapshot when a line is completed or the student pauses.
+2. A vision-capable language model reads the handwriting and returns structured math representations for each line.
+3. The FastAPI backend passes supported steps to SymPy, which checks equivalence and common errors such as lost solutions or a reversed inequality. Symbolic checks run in worker processes with a time limit.
+4. The backend combines the reading and check results. When a line needs help, a separate model request creates graduated hints and a short spoken nudge.
+5. The frontend places status markers beside the relevant lines, updates the route panel, and applies a voice policy so feedback is timely without interrupting every step.
 
-Open **http://localhost:5173** on this computer. Leave `LOCAL_IP` and `VITE_BACKEND_IP` unset so the app and CORS stay on localhost. That is the teammate default.
+The frontend is built with **React 19, TypeScript, and Vite**, with `perfect-freehand` for ink geometry, KaTeX for math rendering, and PDF.js for PDF import. The backend uses **Python 3.11+, FastAPI, Pydantic, and SymPy**. Claude is the default language-model provider; Gemini and Grok are also supported. Provider keys stay in the backend. See `backend/.env.example` for configuration.
 
-Shortcuts: `P` pen, `E` eraser, `⌘Z` / `⇧⌘Z` undo/redo. Right-click drag also erases.
+For stylus users, the canvas reads pen pressure and filters broad touch contacts to reduce palm marks. The project also includes a separate handwriting-model training effort: we built a companion application and collected thousands of handwritten characters. The live app's board-reading flow currently sends board snapshots to a vision model; the handwriting-model training work is a distinct part of the project.
 
-## Phone or iPad (same Wi-Fi)
+## Challenges we ran into
 
-The phone or iPad is only a browser. This computer still runs the app, the API, and holds the API key.
+- **Creating handwriting training data.** We needed a practical way to collect varied examples, so we made a separate application and handwrote thousands of characters for model training.
+- **Making a whiteboard feel natural.** Drawing, erasing, undoing, typed work, stylus pressure, palm rejection, and smaller screens all needed to work together without getting in the student's way.
+- **Keeping feedback fast.** Full-board checks can be expensive and slow, so we designed checkpoints around line completion and pauses, and kept hint generation separate from the initial check.
+- **Reducing hallucinations.** A language model can misread handwriting or make a confident math mistake. We use structured transcription and rely on SymPy for symbolic verification where possible, while making AI-only judgments visible as such.
+- **Coordinating a broad product.** The project brought together model work, backend orchestration, a drawing interface, speech, and a coherent tutoring experience under hackathon time constraints.
 
-1. Find this computer's LAN IPv4 (`ipconfig` on Windows, `ip addr` on macOS/Linux). Use the Wi-Fi adapter. Skip virtual adapters (`172.*` from WSL or Hyper-V). Vite also prints it as `Network:` after `npm run dev`.
-2. Set **the same IP** in both env files, then restart the API and Vite (Vite only reads `VITE_*` at startup):
+## Accomplishments we are proud of
 
-```
-# backend/.env
-LOCAL_IP=192.168.1.42
-# FRONTEND_PORT=5173   # optional; this is the default
+- Built an interactive tutor that responds to a student's working, not just a prompt typed into chat.
+- Designed feedback around the first incorrect step and a progressive hint ladder that preserves the student's role in solving.
+- Combined vision-model handwriting transcription with symbolic math checking and clear labeling when verification is uncertain.
+- Delivered a complete whiteboard workflow with homework scanning, voice feedback, typed steps, language options, and tablet-friendly palm handling.
+- Created a companion workflow and a large handwritten character set for training a handwriting model.
 
-# frontend/.env
-VITE_BACKEND_IP=192.168.1.42
-```
+## What we learned
 
-The frontend then calls `http://192.168.1.42:8000`. CORS always allows `http://localhost:5173` and `http://127.0.0.1:5173`. With `LOCAL_IP` set, it also allows `http://192.168.1.42:5173`.
+We learned how much work sits between a model demo and a useful learning tool. Training a model requires thoughtful data collection; real-time tutoring requires balancing latency with careful checking; and whiteboard UI/UX depends on small interaction details such as palm detection, line grouping, and how feedback appears. We also learned to divide responsibilities between an LLM that can interpret messy input and deterministic tools that can verify math, and to coordinate that work across a team.
 
-3. Start both servers so they listen on the LAN (not only 127.0.0.1):
+## What's next
 
-```powershell
-cd backend
-uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
+We want to expand Untangled to more advanced mathematics, including multivariable calculus, partial differential equations, linear algebra, and proofs. We also see a path into physics and chemistry, where students could receive the same step-by-step guidance while working through problems in those subjects.
 
-```powershell
-cd frontend
-npm run dev
-```
+## Run it yourself
 
-Git Bash or macOS can use `./dev.sh` instead (`--host 0.0.0.0` is already in that script).
+You will need **Python 3.11+**, [uv](https://docs.astral.sh/uv/), and **Node.js 20+**. You also need an API key for a supported language-model provider. Claude is the default; Gemini and Grok are optional providers.
 
-Vite prints:
+1. Create `backend/.env` from `backend/.env.example` and add a provider key, such as `ANTHROPIC_API_KEY`. To use Gemini or Grok instead, add the matching key and set `NORTHSTAR_PROVIDER` as documented in the example file.
+2. Create `frontend/.env` from `frontend/.env.example`. Leave `VITE_BACKEND_IP` unset for local development.
+3. In one terminal, start the API:
 
-```
-  ➜  Local:   http://localhost:5173/
-  ➜  Network: http://192.168.1.42:5173/
-```
+   ```bash
+   cd backend
+   uv sync
+   uv run uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+   ```
 
-4. On the phone or iPad, join the **same Wi-Fi** and open the **Network** URL in Safari (or Chrome), for example `http://192.168.1.42:5173`. Do not open `localhost` on the device — that is the device itself. Guest and campus networks often block device-to-device traffic; a phone hotspot with both devices joined works when venue Wi-Fi does not.
+4. In another terminal, start the frontend:
 
-If Windows Firewall prompts, allow Node and Python on private networks. If the device cannot connect and no prompt appeared:
+   ```bash
+   cd frontend
+   npm ci
+   npm run dev
+   ```
 
-```powershell
-New-NetFirewallRule -DisplayName "Untangled Vite" -Direction Inbound -Protocol TCP -LocalPort 5173 -Action Allow -Profile Private
-New-NetFirewallRule -DisplayName "Untangled API" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow -Profile Private
-```
+5. Open the local URL printed by Vite, usually **http://localhost:5173**.
 
-Apple Pencil uses real pressure. The canvas keeps the pen pointer and drops the palm: a wide touch is ignored, and if the palm lands first its mark is discarded when the pencil touches. After the pencil has been used, fingers stay ignored. More iPad notes are in [IPAD.md](IPAD.md).
+To use a phone or tablet on the same Wi-Fi, see [IPAD.md](IPAD.md) for LAN setup and device notes. The microphone feature may require HTTPS on iOS. Never commit API keys.
 
-- Plain `http://` is enough for drawing, typed steps, checks, and the spoken GPS replies. The microphone for Ask Untangled needs HTTPS (see ngrok below).
-- Keep the computer awake and both processes running.
-- A Home Screen icon is only a bookmark; it breaks when this computer's IP changes.
-- Run the servers on Windows itself if the tablet is connecting to a Windows PC. A server inside WSL is often unreachable.
+## Project layout
 
-## Off-network: ngrok
+| Path | Purpose |
+| --- | --- |
+| `frontend/src/board/` | Whiteboard drawing, stroke geometry, and palm handling |
+| `frontend/src/useTutor.ts` | Checkpoint timing, API requests, and voice behavior |
+| `frontend/src/RoutePanel.tsx` | Route status and hint display |
+| `backend/main.py` | FastAPI routes and orchestration |
+| `backend/tutor.py` | Language-model provider calls for reading and tutoring |
+| `backend/verify.py` | SymPy-based math verification |
+| `backend/tts.py` | Optional ElevenLabs speech synthesis |
 
-Use [ngrok](https://ngrok.com/) when the phone is not on the same LAN, or when you need **HTTPS** (iOS only allows the Ask Untangled microphone on HTTPS). The API key stays on this computer. Anyone with the public link can use your API quota until you stop ngrok. Do not put the URL in git.
-
-Install ngrok and add your auth token once (`ngrok config add-authtoken …`). Start the API and `npm run dev` on this computer, then in another terminal:
-
-```powershell
-ngrok http 5173
-```
-
-On the phone or iPad, open the `https://….ngrok-free.app` URL (the **Forwarding** line in the ngrok UI). That is the page only.
-
-Board checks still go to `http://<VITE_BACKEND_IP>:8000`. Tunneling **5173** does not proxy `/api`. For checks from another network you also need the API reachable, for example a second tunnel:
-
-```powershell
-ngrok http 8000
-```
-
-`VITE_BACKEND_IP` is a LAN IPv4 plus port 8000, not an `https://….ngrok-free.app` host, so same-Wi-Fi `LOCAL_IP` / `VITE_BACKEND_IP` is what makes checks work. ngrok on 5173 is the public HTTPS page (and the mic). Stop both tunnels when you are done.
-
-## Tests
-
-```bash
-cd backend && uv run pytest
-```
-
-**Without an API key:** start the API with `NORTHSTAR_FAKE_VISION=1`. Instead of sending the image to Claude, the server
-uses the text typed by the dev helper below. SymPy, markers, voice, hints and the route panel all run for real, but hints
-are plain templates. Hand-drawn strokes can't be read in this mode.
-
-## Layout
-
-| Path | What |
-|---|---|
-| `backend/verify.py` | SymPy step checker (sanitized parsing, equivalence, lost/extra solutions) |
-| `backend/tutor.py` | Claude calls: read the board, explain a flagged line, read a scanned problem |
-| `backend/main.py` | FastAPI: `/api/check` merges both, `/api/problem` reads a homework crop; SymPy runs in killable worker processes |
-| `frontend/src/board/` | Ruled whiteboard canvas, stroke → line mapping, the labeled snapshot sent to Claude |
-| `frontend/src/ProblemScanner.tsx` | Photo/PDF import and the crop-the-problem sheet |
-| `frontend/src/useTutor.ts` | Checkpoint & pause detection, request handling, the voice policy |
-| `frontend/src/RoutePanel.tsx` | Status, hint ladder, route view |
-
-Dev helper (in the browser console while running `npm run dev`):
-`northstar.write(1, "2x - 6 + 4 = 10")` writes a line in a handwriting font.
+For tests and additional development notes, see the repository's `AGENTS.md` and backend test suite.
