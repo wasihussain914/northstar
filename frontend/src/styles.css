@@ -1730,11 +1730,18 @@ canvas.ink.tool-scroll:active {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  /* Hug the image exactly (the crop box is positioned against it), and
+     never push the Use-this-problem footer off screen on a tall page. */
+  align-self: center;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .crop-wrap img {
   display: block;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
+  max-height: min(58vh, 720px);
   pointer-events: none;
 }
 
