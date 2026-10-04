@@ -111,6 +111,7 @@ _FUNCS = {
     "tanh": sp.tanh,
     "pi": sp.pi,
     "E": sp.E,
+    "e": sp.E,
     "oo": sp.oo,
     "inf": sp.oo,
     "factorial": sp.factorial,
@@ -133,8 +134,9 @@ _FUNCS = {
     "grad": _grad,
 }
 # Every single letter is a real-valued variable, so names like N, S, Q or I
-# never resolve to sympy objects.
-_SYMBOLS = {c: sp.Symbol(c, real=True) for c in string.ascii_letters if c != "E"}
+# never resolve to sympy objects — except e/E, which mean Euler's number
+# ("e^x" written by hand must equal exp(x)).
+_SYMBOLS = {c: sp.Symbol(c, real=True) for c in string.ascii_letters if c not in "eE"}
 _LOCALS = {**_SYMBOLS, **_FUNCS}
 
 _ALLOWED_CHARS = re.compile(r"^[0-9A-Za-z+\-*/^().,=<>!%\[\]; ]+$")
@@ -261,9 +263,17 @@ def _check_idents(text: str) -> None:
             raise ParseError(f"unknown name {ident!r}")
 
 
+_INT_WORD = re.compile(r"\bint\s+(.+?)\s*\bd([a-zA-Z])\b")
+
+
 def parse_statement(text: str, *, evaluate: bool = True) -> Statement:
     """Parse one line, e.g. '2*(x-3)+4 = 10', 'x > 3', 'diff(x^2, x)' or '[[1, 2], [3, 4]]'."""
     text = _clean(text)
+    # Student spelling of an integral: "int x^2 e^x dx" means integrate(...).
+    for _ in range(4):
+        text, n = _INT_WORD.subn(r"integrate(\1, \2)", text)
+        if not n:
+            break
     if not text or not _ALLOWED_CHARS.match(text):
         raise ParseError(f"disallowed characters in {text!r}")
     if re.search(r"\.\s*[A-Za-z_]", text) or _BANNED.search(text):
@@ -592,6 +602,9 @@ def _written_expression(expr: sp.Basic) -> sp.Basic:
     """
     if not expr.args:
         return expr
+    # "e^x" is written as a power but evaluates to exp(x): same spelling.
+    if expr.is_Pow and expr.base == sp.E:
+        return sp.exp(_written_expression(expr.exp), evaluate=False)
     args = [_written_expression(arg) for arg in expr.args]
     if expr.is_Add or expr.is_Mul:
         args = [child for arg in args for child in (arg.args if arg.func == expr.func else (arg,))]

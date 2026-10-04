@@ -317,8 +317,33 @@ def check_integrate(problem: str, steps, target: str | None) -> dict | None:
         if (cur.kind == "eq" and isinstance(cur.lhs, sp.Symbol) and str(cur.lhs) in defs
                 and defs[str(cur.lhs)] == cur.rhs):
             return _Judged(StepCheck("valid"))  # choosing parts is true by definition
+        # A rewrite that still contains an integral ("int x^2 e^x dx =
+        # x^2 e^x - int 2x e^x dx", or that same right side alone) is proven
+        # by evaluating the integrals on both sides.
+        has_int = any(side is not None and getattr(side, "has", lambda *_: False)(sp.Integral)
+                      for side in (cur.lhs, cur.rhs))
+        # Only when fully substituted (no leftover u/v letters): the abstract
+        # by-parts formula itself is a reference formula, not provable algebra.
+        if has_int and not (cur.free - {var}):
+            try:
+                if cur.kind == "eq" and cur.rhs is not None:
+                    ok = exprs_equal(cur.lhs.doit(), cur.rhs.doit()) is True
+                else:
+                    done = cur.lhs.doit()
+                    ok = (exprs_equal(done, final) is True if definite and final is not None
+                          else is_antiderivative(done))
+            except Exception:
+                return _Judged(StepCheck("unknown"), cur)
+            if ok:
+                return _Judged(StepCheck("valid"), cur)
+            return _Judged(StepCheck("invalid", "the integral rewrite does not match",
+                                     "This rewrite isn't equal to the integral it came from."))
         val = _expr_value(cur)
         if val is None:
+            return _Judged(StepCheck("unknown"), cur)
+        # Letters that aren't the variable (or a +C constant) mean a general
+        # formula like "uv - v du": not ours to prove or refute.
+        if {s for s in val.free_symbols if s != var and not re.fullmatch(r"C\d*", str(s))}:
             return _Judged(StepCheck("unknown"), cur)
         if matches_reference(val):
             constants = {sym for sym in val.free_symbols - integ.free_symbols

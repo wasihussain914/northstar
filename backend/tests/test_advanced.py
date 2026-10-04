@@ -286,3 +286,23 @@ def test_differential_forms_spaced_and_slash():
     assert ok == {1: "valid", 2: "valid"}
     ok, _ = line_verdicts("integrate(2*x*cos(x^2), x)", ["u = x^2", "du/dx = 2*x"])
     assert ok == {1: "valid", 2: "valid"}
+
+
+def test_the_demo_by_parts_solution_is_fully_verified():
+    # The exact canned steps /api/finish writes for the stage demo: every
+    # line must prove green and the board must arrive.
+    from main import DEMO_FINISH
+    steps = DEMO_FINISH["integratex^2e^xdx"]
+    out = check_steps("integrate(x^2*exp(x), x)", list(enumerate(steps, 1)), "x")
+    verdicts = {n: out["results"][n]["verdict"] for n in out["results"]}
+    assert all(v == "valid" for v in verdicts.values()), verdicts
+    assert out["arrived"] is True
+
+
+def test_int_word_notation_parses_and_wrong_rewrites_flag():
+    ok, arrived = line_verdicts("integrate(x^2*exp(x), x)",
+                                ["int x^2 e^x dx = x^2 e^x - int 2x e^x dx"])
+    assert ok == {1: "valid"}
+    bad, _ = line_verdicts("integrate(x^2*exp(x), x)",
+                           ["int x^2 e^x dx = x^2 e^x - int x e^x dx"])
+    assert bad == {1: "invalid"}

@@ -155,6 +155,26 @@ class HintsRequest(BaseModel):
 SKIP_KINDS = {"crossed_out", "not_math", "question", "formula", "intermediate"}
 
 
+
+def step_lines(board: dict) -> list[tuple[int, str]]:
+    """Lines SymPy should chain-check. Reference formulas and intermediate
+    work only join in calculus tasks, where the domain checker judges each
+    line on its own merits (substitutions, differentials) instead of
+    comparing neighbours."""
+    from domains import resolve_task
+    calc = resolve_task(board.get("problem_sympy", ""), board.get("task", "")) in (
+        "integrate", "differentiate", "ode", "pde", "limit")
+    out = []
+    for l in sorted(board.get("lines", []), key=lambda l: l["line"]):
+        kind = l["kind"]
+        if kind in ("crossed_out", "not_math", "question", "incomplete"):
+            continue
+        if kind in ("formula", "intermediate") and not calc:
+            continue
+        out.append((l["line"], l["sympy"]))
+    return out
+
+
 def merge(board: dict, sym: dict | None) -> list[dict]:
     """Combine Claude's reading with SymPy's verdicts, line by line."""
     sym_results = (sym or {}).get("results", {})
@@ -166,8 +186,17 @@ def merge(board: dict, sym: dict | None) -> list[dict]:
         entry = {"line": line, "latex": item["latex"], "sympy": item["sympy"], "kind": kind,
                  "status": "unclear", "source": "ai", "detail": "", "_detail": ""}
         if kind in {"formula", "intermediate"}:
-            # Only an actual math error is a wrong turn, never a change of context.
-            entry["status"] = "error" if item["ai_verdict"] == "error" else "skip"
+            # SymPy can prove substitutions ("u = x^2", "du = 2x dx"): a proven
+            # line shows verified. Otherwise only an actual math error is a
+            # wrong turn, never a change of context.
+            check = sym_results.get(line)
+            if check and check["verdict"] == "valid":
+                entry["status"], entry["source"] = "ok", "verified"
+            elif check and check["verdict"] == "invalid" and check.get("note"):
+                entry["status"], entry["source"] = "error", "verified"
+                entry["detail"], entry["_detail"] = check.get("note", ""), check["detail"]
+            else:
+                entry["status"] = "error" if item["ai_verdict"] == "error" else "skip"
         elif kind in SKIP_KINDS:
             entry["status"] = "skip"
         elif kind == "incomplete":
@@ -255,8 +284,7 @@ async def check(req: CheckRequest) -> dict:
         (DEBUG_DIR / f"{stamp}.png").write_bytes(raw)
 
     def line_steps(b: dict) -> list[tuple[int, str]]:
-        return [(l["line"], l["sympy"]) for l in sorted(b["lines"], key=lambda l: l["line"])
-                if l["kind"] not in SKIP_KINDS and l["kind"] != "incomplete"]
+        return step_lines(b)
 
     started = time.perf_counter()
     board = sym = None
@@ -396,8 +424,7 @@ async def hints(req: HintsRequest) -> dict:
         n = req.line_numbers[i] if i < len(req.line_numbers) else i + 1
         board["lines"].append({"line": n, "latex": k.latex, "sympy": k.sympy, "kind": k.kind,
                                "ai_verdict": k.ai_verdict})
-    steps = [(l["line"], l["sympy"]) for l in sorted(board["lines"], key=lambda l: l["line"])
-             if l["kind"] not in SKIP_KINDS and l["kind"] != "incomplete"]
+    steps = step_lines(board)
     sym = await sympy_pool.check(board["problem_sympy"], steps, board["target_variable"], board["task"])
     lines = merge(board, sym)
     flagged = next((l for l in lines if l["line"] == req.first_error), None)
@@ -486,11 +513,40 @@ class FinishRequest(BaseModel):
     lang: str = Field(default="en", max_length=8)
 
 
+# The stage-demo problem gets a fixed, SymPy-verified solution: the live demo
+# must write the same clean by-parts work every single time.
+DEMO_FINISH = {
+    "integratex^2e^xdx": [
+        "u = x^2",
+        "du = 2x dx",
+        "dv = e^x dx",
+        "v = e^x",
+        "int x^2 e^x dx = x^2 e^x - int 2x e^x dx",
+        "x^2 e^x - 2(x e^x - e^x) + C",
+        "x^2 e^x - 2x e^x + 2 e^x + C",
+    ],
+}
+
+
+def canned_finish(problem: str, existing: list[dict]) -> list[str] | None:
+    key = "".join((problem or "").lower().split()).replace("*", "").replace("exp(x)", "e^x")
+    key = key.replace("integrate(", "integrate").replace(",x)", "dx")
+    steps = DEMO_FINISH.get(key)
+    if not steps:
+        return None
+    written = {"".join(str(l.get("text", "")).lower().split()) for l in existing}
+    remaining = [s for s in steps if "".join(s.lower().split()) not in written]
+    return remaining or None
+
+
 @app.post("/api/finish")
 async def finish(req: FinishRequest) -> dict:
     """Write the rest of the solution, one line per step, from the student's last line."""
     lines = [{"line": int(l.get("line", i + 1)), "text": str(l.get("text", ""))[:500]}
              for i, l in enumerate(req.lines)]
+    canned = canned_finish(req.problem, lines)
+    if canned is not None:
+        return {"steps": canned[:8]}
     try:
         out = await (fake_tutor if FAKE_VISION else tutor).finish_work(req.problem, lines, req.lang)
     except tutor.TutorError as exc:
