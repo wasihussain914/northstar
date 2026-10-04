@@ -88,6 +88,14 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
         </section>
       )}
 
+      {result?.board_question && (
+        <section className="card asked-card">
+          <span className="eyebrow">You wrote</span>
+          <p className="asked-q">“{result.board_question.question}”</p>
+          <p className="asked-a">{result.board_question.answer}</p>
+        </section>
+      )}
+
       {phase === "empty" && errorLine == null && (
         <section className="card">
           <span className="eyebrow">Next turn</span>

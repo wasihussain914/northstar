@@ -150,7 +150,12 @@ If a line is ambiguous, pick the most likely reading.
 - latex: the line as LaTeX (no surrounding $).
 - sympy: the line in the dialect below. Leave it empty if the line is prose, crossed out, or clearly unfinished.
 - If a line continues a chain of equal expressions (starts with "="), give just the expression after the "=".
-- kind: equation, inequality, expression, crossed_out, not_math, or incomplete.
+- kind: equation, inequality, expression, claim, question, crossed_out, not_math, or incomplete. A claim is a \
+proof step stated in words, possibly with math inside it ("let m be the minimum weight", "since C is linear, \
+v + w is in C", "therefore d = m"). Proof steps are never not_math: judge each claim's ai_verdict by whether \
+it is true and follows from the lines before it (and the problem), exactly as you would a computation line. \
+For a claim, sympy may be empty. A question is the student writing TO you ("what do I do?", "help", "is this \
+right so far?", "im not sure what to do") — transcribe it verbatim into latex as plain text and never judge it.
 - ai_verdict: does this line follow correctly from the line before it (the first line follows from the problem)? \
 ok, error, or unclear. A line that correctly carries forward an earlier mistake is ok; only the line where the \
 mistake is made is an error.
@@ -212,8 +217,8 @@ BOARD_SCHEMA: dict[str, Any] = {
                     "line": {"type": "integer"},
                     "latex": {"type": "string"},
                     "sympy": {"type": "string"},
-                    "kind": {"type": "string", "enum": ["equation", "inequality", "expression", "crossed_out",
-                                                        "not_math", "incomplete"]},
+                    "kind": {"type": "string", "enum": ["equation", "inequality", "expression", "claim",
+                                                        "question", "crossed_out", "not_math", "incomplete"]},
                     "ai_verdict": {"type": "string", "enum": ["ok", "error", "unclear"]},
                 },
                 "required": ["line", "latex", "sympy", "kind", "ai_verdict"],

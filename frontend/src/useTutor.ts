@@ -44,6 +44,9 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean, l
   const timer = useRef<number | undefined>(undefined);
   const nudgeTimer = useRef<number | undefined>(undefined);
   const voice = useRef({ errorKey: "", hadError: false, arrived: false });
+  // Questions written on the board that were already answered: line -> stroke
+  // signature at the time, so the server isn't asked again every check.
+  const answeredQs = useRef(new Map<number, string>());
 
   const sigsNow = useMemo(() => lineSignatures(strokes), [strokes]);
 
@@ -65,8 +68,11 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean, l
     setInFlight(true);
     try {
       const transcript = typedTranscript(latest.current.strokes);
+      const answered = [...answeredQs.current.entries()]
+        .filter(([line, sig]) => snap.signatures.get(line) === sig)
+        .map(([line]) => line);
       const res = await checkBoard(latest.current.problem, snap.image, snap.lines, transcript,
-        latest.current.lang);
+        latest.current.lang, answered);
       setResult(res);
       setCheckedSigs(snap.signatures);
       setFailure(null);
@@ -88,6 +94,15 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean, l
   const respond = (res: CheckResult, sigs: Map<number, string>) => {
     window.clearTimeout(nudgeTimer.current);
     const v = voice.current;
+    // A question written on the paper gets its answer spoken first, once.
+    if (res.board_question) {
+      const q = res.board_question;
+      if (answeredQs.current.get(q.line) !== sigs.get(q.line)) {
+        answeredQs.current.set(q.line, sigs.get(q.line) ?? "");
+        say(q.answer);
+        return; // don't talk over the answer with a nudge this round
+      }
+    }
     if (res.first_error != null) {
       const key = `${res.first_error}|${sigs.get(res.first_error) ?? ""}`;
       v.hadError = true;
@@ -128,6 +143,7 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean, l
       setCheckedSigs(new Map());
       setFailure(null);
       voice.current = { errorKey: "", hadError: false, arrived: false };
+      answeredQs.current.clear();
       return;
     }
     const deepest = Math.max(...sigsNow.keys());

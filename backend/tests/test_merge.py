@@ -36,3 +36,21 @@ def test_student_facing_notes_never_contain_the_answer():
 def test_without_sympy_uses_claude_verdicts():
     board = {"lines": [line(1, "x = 2", ai="error")]}
     assert merge(board, None)[0]["status"] == "error"
+
+
+def test_claim_lines_are_judged_by_the_model_not_skipped():
+    # Proof steps written in words ("since C is linear, v + w is in C") are
+    # claims: no sympy, but still judged, never silently skipped.
+    from tutor import BOARD_SCHEMA, SYSTEM
+    assert "claim" in BOARD_SCHEMA["properties"]["lines"]["items"]["properties"]["kind"]["enum"]
+    assert "never not_math" in SYSTEM
+    board = {"lines": [line(1, "", kind="claim", ai="ok"), line(2, "", kind="claim", ai="error")]}
+    out = {l["line"]: l["status"] for l in merge(board, None)}
+    assert out == {1: "ok", 2: "error"}
+
+
+def test_questions_written_on_the_board_are_skipped_not_judged():
+    from main import SKIP_KINDS
+    assert "question" in SKIP_KINDS
+    board = {"lines": [line(1, "", kind="question", ai="unclear")]}
+    assert merge(board, None)[0]["status"] == "skip"

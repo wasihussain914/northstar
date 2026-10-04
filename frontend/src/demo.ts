@@ -37,6 +37,27 @@ export const DEMOS: DemoScript[] = [
     ],
   },
   {
+    // Study-guide problem 4 (MATH 3320): a proof, with the classic wrong
+    // identity planted — distance is the weight of the SUM, not the sum of
+    // the weights. Claims are judged by the model, so this demo shows proof
+    // tutoring, not just algebra.
+    problem: "Prove: the distance of a linear code C equals the minimum weight of its nonzero codewords",
+    steps: [
+      { do: "write", line: 1, text: "m = min wt(u), u != 0" },
+      { do: "write", line: 2, text: "d(u, 0) = wt(u)" },
+      { do: "write", line: 3, text: "0 in C, so d <= m" },
+      { do: "write", line: 4, text: "d(v, w) = wt(v) + wt(w)" }, // the wrong turn
+      { do: "until", what: "error" },
+      { do: "pause", ms: 5000 },
+      { do: "erase", line: 4 },
+      { do: "write", line: 4, text: "d(v, w) = wt(v + w)" },
+      { do: "pause", ms: 600 },
+      { do: "write", line: 5, text: "v + w in C, v + w != 0" },
+      { do: "write", line: 6, text: "so d >= m, hence d = m" },
+      { do: "until", what: "on-route" },
+    ],
+  },
+  {
     problem: "Differentiate x³ − 3x² + 2x",
     steps: [
       { do: "write", line: 1, text: "3x^2 - 6x" }, // the wrong turn: dropped the + 2

@@ -26,6 +26,7 @@ import { setServerTts, setSpeechLang, speechSupported, stopSpeaking, unlockSpeec
 
 const PRESETS = [
   "Solve 2(x − 3) + 4 = 10",
+  "Prove: the distance of a linear code C equals the minimum weight of its nonzero codewords",
   "Differentiate x³ − 3x² + 2x",
   "Solve 3(x + 2) − 5 = 2x + 9",
   "Solve −2x + 4 > 10",
@@ -127,6 +128,8 @@ export default function App() {
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   // The glass panel floats over the page on the left. Open by default where there's room for it.
   const [panelOpen, setPanelOpen] = useState(() => window.innerWidth >= 1100);
+  // Pen-first: on touch devices the type bar stays tucked away until asked for.
+  const [typeBarOpen, setTypeBarOpen] = useState(() => !window.matchMedia("(pointer: coarse)").matches);
 
   const [glyphLibrary, setGlyphLibrary] = useState<GlyphLibrary | null>(null);
 
@@ -263,7 +266,8 @@ export default function App() {
       else if (!mod && e.key === "p") setTool("pen");
       else if (!mod && e.key === "t") {
         e.preventDefault();
-        document.getElementById("type-step")?.focus();
+        setTypeBarOpen(true);
+        window.setTimeout(() => document.getElementById("type-step")?.focus(), 50);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -409,6 +413,10 @@ export default function App() {
           <ToolButton onClick={() => dispatch({ type: "clear" })} disabled={!strokes.length} label="Clear board">
             <path d="M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11" />
           </ToolButton>
+          <span className="pill-divider" />
+          <ToolButton active={typeBarOpen} onClick={() => setTypeBarOpen(!typeBarOpen)} label="Type steps (T)">
+            <path d="M3 6h14v9H3zM5.5 8.5h.01M8.5 8.5h.01M11.5 8.5h.01M14.5 8.5h.01M6 12.5h8" />
+          </ToolButton>
         </div>
 
         <div className="topbar-actions">
@@ -518,7 +526,9 @@ export default function App() {
               theme={theme}
             />
           </div>
-          <TypeBar line={typeTarget} replacing={typeTarget != null && usedLines.has(typeTarget)} onSubmit={typeStep} />
+          {typeBarOpen && (
+            <TypeBar line={typeTarget} replacing={typeTarget != null && usedLines.has(typeTarget)} onSubmit={typeStep} />
+          )}
         </section>
         <div className={`drawer-backdrop${panelOpen ? " open" : ""}`} onClick={() => setPanelOpen(false)} />
         <aside className={`drawer${panelOpen ? " open" : ""}`} aria-label="Route details">

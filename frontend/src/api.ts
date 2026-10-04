@@ -26,6 +26,8 @@ export interface CheckResult {
   route_note: string;
   arrived: boolean;
   verified: boolean;
+  /** A question written on the board, answered. Null when there isn't one. */
+  board_question: { line: number; question: string; answer: string } | null;
   timing_ms: { read: number; total: number };
 }
 
@@ -54,8 +56,8 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 
 /** `transcript`: lines the student typed (line -> exact text). */
 export function checkBoard(problem: string, image: string, lines: number[], transcript?: Record<number, string>,
-                           lang = "en") {
-  return post<CheckResult>("/api/check", { problem, image, lines, transcript, lang });
+                           lang = "en", answered: number[] = []) {
+  return post<CheckResult>("/api/check", { problem, image, lines, transcript, lang, answered });
 }
 
 export function askTutor(req: {
