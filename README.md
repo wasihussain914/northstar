@@ -1,4 +1,5 @@
-<img width="2172" height="724" alt="EBF4BA50-68DB-485F-8534-53F58F22896E" src="https://github.com/user-attachments/assets/e894f11c-8021-434d-86c5-bb85398f2114" />
+<img width="2172" height="724" alt="FCDD8AF0-872E-4B8F-86FB-8435B7819044" src="https://github.com/user-attachments/assets/dd7a8901-78ad-4d04-ae10-92cd082d37bc" />
+
 
 **A personalized AI tutor that works alongside you as you solve math.** Untangled watches your whiteboard, catches mistakes as they happen, annotates the step that went off track, and guides you toward understanding instead of jumping straight to the answer.
 
