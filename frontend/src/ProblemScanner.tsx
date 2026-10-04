@@ -45,13 +45,66 @@ export function ProblemScanner({ onUse, onTrip, onClose }: Props) {
   // More than one problem found in the crop: pick which ones become stops.
   const [found, setFound] = useState<{ problems: { problem: string; latex: string }[]; selected: boolean[]; image: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setCameraOn(false);
+    setCameraReady(false);
+  }, []);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (cameraOn) stopCamera();
+      else onClose();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, cameraOn, stopCamera]);
+
+  useEffect(() => () => streamRef.current?.getTracks().forEach((t) => t.stop()), []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!cameraOn || !video || !stream) return;
+    video.srcObject = stream;
+    void video.play().catch(() => {});
+  }, [cameraOn]);
+
+  const startCamera = async () => {
+    setError(null);
+    setBusy("load");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setCameraOn(true);
+    } catch {
+      setError("Couldn't open the camera. Allow camera access, or open a photo instead.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const snap = () => {
+    const video = videoRef.current;
+    if (!video?.videoWidth) return;
+    const scale = Math.min(1, PAGE_MAX / Math.max(video.videoWidth, video.videoHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    canvas.getContext("2d")!.drawImage(video, 0, 0, canvas.width, canvas.height);
+    stopCamera();
+    showCanvas(canvas);
+  };
 
   const showCanvas = (canvas: HTMLCanvasElement, extra?: Partial<Page>) => {
     setPage({ canvas, url: canvas.toDataURL("image/png"), ...extra });
@@ -161,7 +214,7 @@ export function ProblemScanner({ onUse, onTrip, onClose }: Props) {
     <div className="scanner-backdrop" onClick={onClose}>
       <div className="scanner" role="dialog" aria-label="Scan your homework" onClick={(e) => e.stopPropagation()}>
         <header className="scanner-head">
-          <h2>{found ? "Your route for today" : page ? "Box the problem you're solving" : "Scan your homework"}</h2>
+          <h2>{found ? "Your route for today" : cameraOn ? "Point the camera at the page" : page ? "Box the problem you're solving" : "Scan your homework"}</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close">
             <svg viewBox="0 0 20 20" aria-hidden="true">
               <path d="M5 5l10 10M15 5L5 15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
@@ -206,9 +259,17 @@ export function ProblemScanner({ onUse, onTrip, onClose }: Props) {
               </button>
             </footer>
           </>
+        ) : cameraOn ? (
+          <div className="camera-stage">
+            <video ref={videoRef} autoPlay playsInline muted onLoadedMetadata={() => setCameraReady(true)} />
+            <footer className="scanner-foot">
+              <button className="btn ghost" onClick={stopCamera}>Back</button>
+              <button className="btn primary" onClick={snap} disabled={!cameraReady}>Take photo</button>
+            </footer>
+          </div>
         ) : !page ? (
           <div className="scanner-pick">
-            <button className="pick-tile" onClick={() => cameraRef.current?.click()}>
+            <button className="pick-tile" onClick={startCamera} disabled={busy === "load"}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M4 7h3l1.5-2h7L17 7h3a1 1 0 011 1v11a1 1 0 01-1 1H4a1 1 0 01-1-1V8a1 1 0 011-1z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
                 <circle cx="12" cy="13.5" r="3.6" fill="none" stroke="currentColor" strokeWidth="1.6" />
@@ -255,7 +316,6 @@ export function ProblemScanner({ onUse, onTrip, onClose }: Props) {
 
         {error && <p className="scanner-error">{error}</p>}
 
-        <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => onFile(e.target.files?.[0])} />
         <input ref={fileRef} type="file" accept="image/*,application/pdf" hidden onChange={(e) => onFile(e.target.files?.[0])} />
       </div>
     </div>
