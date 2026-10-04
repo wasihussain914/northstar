@@ -182,6 +182,8 @@ asin, acos, atan, sec, csc, cot, sinh, cosh, tanh, pi.
 another word in the student's language — are a SOLUTION LIST, never a product: sympy is "x = 0 or x = 5".
 - Calculus: diff(f, x), diff(f, x, 2), diff(f, x, y), integrate(f, x), integrate(f, x, a, b), limit(f, x, a), \
 limleft(f, x, a), limright(f, x, a), grad(f, x, y).
+- Substitution / by-parts bookkeeping keeps its differentials literally: "u = x^2", "du = 2*x*dx", \
+"dv = exp(x)*dx" (du, dv, dx as plain names). Never drop the dx, and never rewrite these as diff(...).
 - Sums: summation(term, k, 1, n).
 - ODEs: the unknown is a function, as in diff(y(x), x, 2) + y(x) = 0. A proposed solution is y(x) = .... \
 Initial conditions follow a semicolon: diff(y(x), x) = 2*y(x); y(0) = 3. Physics motion is the same, \
