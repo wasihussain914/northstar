@@ -27,6 +27,7 @@ import { useTutor } from "./useTutor";
 import { loadDataset } from "./glyphs/lib/loadDataset";
 import type { GlyphLibrary } from "./glyphs/types/handwriting";
 import { caption, prefetchSpeech, setServerTts, setSpeechLang, speak, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
+import { setServerStt } from "./stt";
 
 const PRESETS = [
   "Solve x² = 5x",
@@ -261,6 +262,7 @@ export default function App() {
       setHasKey(h ? h.has_key : null);
       setServerTts(!!h?.tts);
       setServerVoice(!!h?.tts);
+      setServerStt(!!h?.stt);
     });
   }, []);
 

@@ -3,6 +3,7 @@ import { askTutor, type CheckResult } from "./api";
 import { snapshot, type Stroke } from "./board/geometry";
 import { typedTranscript } from "./board/handwriting";
 import { caption, speak, stopSpeaking } from "./voice";
+import { Recorder, serverStt } from "./stt";
 import { speechLocale, type Lang } from "./i18n";
 
 // Web Speech recognition isn't in TypeScript's DOM types yet.
@@ -46,9 +47,13 @@ function describe(result: CheckResult | null): string {
 export function FloatingMic({ problem, strokes, result, voiceOn, lang }: Props) {
   const [state, setState] = useState<"idle" | "listening" | "thinking">("idle");
   const recognition = useRef<Recognition | null>(null);
+  const recorder = useRef<Recorder | null>(null);
   const heard = useRef("");
 
-  useEffect(() => () => recognition.current?.stop(), []);
+  useEffect(() => () => {
+    recognition.current?.stop();
+    recorder.current?.cancel();
+  }, []);
 
   const ask = async (question: string) => {
     setState("thinking");
@@ -70,13 +75,41 @@ export function FloatingMic({ problem, strokes, result, voiceOn, lang }: Props) 
     }
   };
 
-  const toggle = () => {
+  const toggle = async () => {
+    if (state === "thinking") return;
+    // Server transcription first: record here, transcribe there. iPad
+    // Safari's own SpeechRecognition can hang the page.
+    if (serverStt()) {
+      if (state === "listening") {
+        setState("thinking");
+        try {
+          const text = (await recorder.current?.stop()) ?? "";
+          recorder.current = null;
+          if (text) await ask(text);
+          else setState("idle");
+        } catch {
+          recorder.current = null;
+          setState("idle");
+          caption("I couldn't hear that — try again?");
+        }
+        return;
+      }
+      stopSpeaking();
+      try {
+        const rec = new Recorder();
+        await rec.start();
+        recorder.current = rec;
+        setState("listening");
+      } catch {
+        caption("The mic isn't available here — write your question on the page instead.");
+      }
+      return;
+    }
     if (!RecognitionCtor) return;
     if (state === "listening") {
       recognition.current?.stop();
       return;
     }
-    if (state === "thinking") return;
     stopSpeaking();
     const rec = new RecognitionCtor();
     rec.lang = speechLocale(lang);
@@ -115,7 +148,7 @@ export function FloatingMic({ problem, strokes, result, voiceOn, lang }: Props) 
     }
   };
 
-  if (!RecognitionCtor) return null;
+  if (!RecognitionCtor && !serverStt()) return null;
   return (
     <button
       className={`floating-mic glass state-${state}`}

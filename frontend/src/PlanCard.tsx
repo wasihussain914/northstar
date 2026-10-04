@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { checkPlan } from "./api";
 import { speechLocale, type Lang } from "./i18n";
 import { speak, stopSpeaking } from "./voice";
+import { Recorder, serverStt } from "./stt";
 
 // Web Speech recognition isn't in TypeScript's DOM types yet.
 interface Recognition {
@@ -40,9 +41,13 @@ export function PlanCard({ problem, lang, voiceOn, onClose }: Props) {
   const [listening, setListening] = useState(false);
   const [result, setResult] = useState<{ verdict: "good" | "partial" | "off"; feedback: string } | null>(null);
   const recognition = useRef<Recognition | null>(null);
+  const recorder = useRef<Recorder | null>(null);
   const heard = useRef("");
 
-  useEffect(() => () => recognition.current?.stop(), []);
+  useEffect(() => () => {
+    recognition.current?.stop();
+    recorder.current?.cancel();
+  }, []);
 
   const submit = async (text: string) => {
     text = text.trim();
@@ -59,7 +64,35 @@ export function PlanCard({ problem, lang, voiceOn, onClose }: Props) {
     }
   };
 
-  const toggleMic = () => {
+  const toggleMic = async () => {
+    // Server transcription first: record here, transcribe there. iPad
+    // Safari's own SpeechRecognition can hang the page.
+    if (serverStt()) {
+      if (listening) {
+        setListening(false);
+        try {
+          const text = (await recorder.current?.stop()) ?? "";
+          recorder.current = null;
+          if (text) {
+            setDraft(text);
+            void submit(text);
+          }
+        } catch {
+          recorder.current = null;
+        }
+        return;
+      }
+      stopSpeaking();
+      try {
+        const rec = new Recorder();
+        await rec.start();
+        recorder.current = rec;
+        setListening(true);
+      } catch {
+        /* mic unavailable: type instead */
+      }
+      return;
+    }
     if (!RecognitionCtor) return;
     if (listening) {
       recognition.current?.stop();
@@ -125,7 +158,7 @@ export function PlanCard({ problem, lang, voiceOn, onClose }: Props) {
           submit(draft);
         }}
       >
-        {RecognitionCtor && (
+        {(RecognitionCtor || serverStt()) && (
           <button
             type="button"
             className={`mic${listening ? " live" : ""}`}

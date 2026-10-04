@@ -271,7 +271,59 @@ async def health() -> dict:
             "provider": "fake" if FAKE_VISION else (
                 "grok" if tutor.using_grok() else "gemini" if tutor.using_gemini() else "claude"),
             "tts": tts.enabled(),
+            "stt": bool(WHISPER_CMD),
             "fake": FAKE_VISION}
+
+
+# Server-side speech-to-text: iPad Safari's SpeechRecognition hangs the page,
+# so the client records audio and we transcribe it here. NORTHSTAR_WHISPER is
+# a command (e.g. "/path/venv/bin/python /path/transcribe.py"); the audio file
+# path is appended. Transcript comes back on stdout.
+WHISPER_CMD = os.environ.get("NORTHSTAR_WHISPER", "").strip()
+
+_AUDIO_EXT = {"audio/webm": ".webm", "audio/mp4": ".m4a", "audio/x-m4a": ".m4a",
+              "audio/mpeg": ".mp3", "audio/wav": ".wav", "audio/ogg": ".ogg"}
+
+
+class TranscribeRequest(BaseModel):
+    audio: str = Field(description="base64 audio (a data: URL prefix is fine)", max_length=15_000_000)
+    mime: str = Field(default="audio/webm", max_length=80)
+
+
+@app.post("/api/transcribe")
+async def transcribe(req: TranscribeRequest) -> dict:
+    if not WHISPER_CMD:
+        raise HTTPException(503, "no transcriber configured on this server")
+    b64 = req.audio.split(",", 1)[1] if req.audio.startswith("data:") else req.audio
+    try:
+        raw = base64.b64decode(b64, validate=True)
+    except ValueError:
+        raise HTTPException(400, "audio is not valid base64")
+    if not raw:
+        raise HTTPException(400, "empty audio")
+    import shlex
+    import tempfile
+    ext = _AUDIO_EXT.get(req.mime.split(";")[0].strip().lower(), ".webm")
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as f:
+        f.write(raw)
+        path = f.name
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *shlex.split(WHISPER_CMD), path,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        try:
+            out, _ = await asyncio.wait_for(proc.communicate(), 30)
+        except asyncio.TimeoutError:
+            proc.kill()
+            raise HTTPException(504, "transcription timed out")
+        if proc.returncode != 0:
+            raise HTTPException(502, "transcription failed")
+        return {"text": out.decode("utf-8", "replace").strip()}
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
 
 
 @app.post("/api/check")
