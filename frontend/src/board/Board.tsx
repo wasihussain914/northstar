@@ -322,11 +322,12 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
       seed,
     });
 
-    // --- If overflow, go above the line with a smaller font ---
+    // --- If overflow, go below the line with a smaller font (above would
+    // sit on top of the student's previous step) ---
     if (startX + result.totalWidth > boardW - 8) {
       startX = 28;
       usedFontH = TEACHER_FONT_HEIGHT_ABOVE;
-      usedBaseline = (teacherInk.line - 1) * LINE_H + usedFontH + 2;
+      usedBaseline = teacherInk.line * LINE_H + usedFontH + 4;
       result = layoutText(phrase, glyphLibrary, startX, usedBaseline, {
         fontHeight: usedFontH,
         inkClearance: 1,
