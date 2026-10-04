@@ -1,43 +1,59 @@
 import { useState } from "react";
 
-interface Props {
-  /** Line the next typed step goes on. */
-  line: number | null;
-  /** True when `line` already has work on it and will be replaced. */
-  replacing: boolean;
-  onSubmit: (text: string) => void;
+export interface TryVerdict {
+  phase: "checking" | "ok" | "error";
+  message: string;
 }
 
-/** Type a step instead of writing it, for anyone who can't (or would rather not) use a pen. */
-export function TypeBar({ line, replacing, onSubmit }: Props) {
+interface Props {
+  /** Line the tried step would sit on (for context), or null when the board is full. */
+  line: number | null;
+  /** Latest verdict for the tried step, or null before the first try. */
+  verdict: TryVerdict | null;
+  onTry: (text: string) => void;
+}
+
+/**
+ * The scratchpad: try a step in text and hear whether it works — nothing is
+ * written on the notebook. When it checks out, write it yourself with the pen.
+ */
+export function TypeBar({ line, verdict, onTry }: Props) {
   const [text, setText] = useState("");
   const full = line == null;
+  const busy = verdict?.phase === "checking";
   return (
-    <form
-      className="type-bar"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!text.trim() || full) return;
-        onSubmit(text.trim());
-        setText("");
-      }}
-    >
-      <span className="type-target" aria-hidden="true">
-        {full ? "Full" : replacing ? `Replace ${line}` : `Line ${line}`}
-      </span>
-      <input
-        id="type-step"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder={full ? "The board is full. Clear a line to keep going." : "Type a step, e.g. 2x - 6 + 4 = 10"}
-        aria-label={full ? "Board full" : replacing ? `Replace line ${line}` : `Type a step for line ${line}`}
-        disabled={full}
-        autoComplete="off"
-        spellCheck={false}
-      />
-      <button className="btn" type="submit" disabled={!text.trim() || full}>
-        {replacing ? "Replace" : "Add"}
-      </button>
-    </form>
+    <div className="type-bar-wrap">
+      <form
+        className="type-bar"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!text.trim() || full || busy) return;
+          onTry(text.trim());
+        }}
+      >
+        <span className="type-target" aria-hidden="true">
+          {full ? "Full" : `Try line ${line}`}
+        </span>
+        <input
+          id="type-step"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={full ? "The board is full. Clear a line to keep going." : "Try a step — I'll say if it works. Nothing is written down."}
+          aria-label={full ? "Board full" : `Try a step for line ${line}`}
+          disabled={full}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <button className="btn" type="submit" disabled={!text.trim() || full || busy}>
+          {busy ? "Checking…" : "Check"}
+        </button>
+      </form>
+      {verdict && verdict.phase !== "checking" && (
+        <p className={`try-verdict try-${verdict.phase}`} role="status">
+          {verdict.phase === "ok" ? "✓ " : "✗ "}
+          {verdict.message}
+        </p>
+      )}
+    </div>
   );
 }

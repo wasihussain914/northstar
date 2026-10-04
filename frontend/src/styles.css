@@ -2454,3 +2454,22 @@ canvas.ink.tool-eraser {
 .asked-a {
   margin: 0;
 }
+
+/* Scratchpad verdicts under the try bar. */
+.type-bar-wrap {
+  flex-shrink: 0;
+}
+
+.try-verdict {
+  margin: 6px 2px 0;
+  font-size: 14px;
+  animation: rise 0.25s ease-out;
+}
+
+.try-ok {
+  color: #7fc24a;
+}
+
+.try-error {
+  color: var(--amber-text);
+}
