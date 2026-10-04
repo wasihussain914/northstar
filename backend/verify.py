@@ -297,7 +297,7 @@ def _parse_roots(text: str) -> Statement | None:
     Collapsed into the equation (x - 0)(x - 5) = 0, whose solution set is the
     answer, and marked solved so the board can arrive on it.
     """
-    parts = re.split(r"\s+or\s+|,", text)
+    parts = re.split(r"\s+(?:or|and)\s+|[,;]", text)
     if len(parts) < 2:
         return None
     sym = None
@@ -552,6 +552,17 @@ def compare(prev: Statement, cur: Statement, target: sp.Symbol | None = None) ->
     return StepCheck("unknown")
 
 
+def _root_fragment(stmt: Statement) -> tuple[sp.Symbol, sp.Expr] | None:
+    """'x = 3' (or '3 = x') with a constant value: one root of a solution list."""
+    if stmt.kind != "eq" or stmt.rhs is None or stmt.solved:
+        return None
+    if isinstance(stmt.lhs, sp.Symbol) and not stmt.rhs.free_symbols:
+        return stmt.lhs, stmt.rhs
+    if isinstance(stmt.rhs, sp.Symbol) and not stmt.lhs.free_symbols:
+        return stmt.rhs, stmt.lhs
+    return None
+
+
 def is_solved_form(stmt: Statement, target: sp.Symbol) -> bool:
     """'x = 4', '4 = x', 'x > 3', or an explicit root list ('x = 0 or x = 5')."""
     if stmt.solved:
@@ -596,16 +607,40 @@ def check_steps(problem: str | None, steps: list[tuple[int, str]], target: str |
             prev = None
     original = prev
 
-    last: Statement | None = None
+    # Parse everything first so a run of single-root lines ("x = 0" beside or
+    # under "x = 5") can be read together as one root list — students and the
+    # handwriting reader both split a quadratic's answers across lines.
+    groups: list[dict] = []  # {"lines": [...], "stmt": Statement|None, "err": str, "roots": (sym, [vals])|None}
     for line, text in steps:
-        if not text.strip():
-            results[line] = {"verdict": "unknown", "detail": "", "note": ""}
+        stmt: Statement | None = None
+        err = ""
+        if text.strip():
+            try:
+                stmt = parse_statement(text)
+            except ParseError as exc:
+                err = str(exc)
+        frag = _root_fragment(stmt) if stmt is not None else None
+        if frag is not None and groups and groups[-1]["roots"] is not None \
+                and groups[-1]["roots"][0] == frag[0]:
+            g = groups[-1]
+            sym, vals = g["roots"]
+            vals = vals + [frag[1]]
+            g["lines"] = g["lines"] + [line]
+            g["roots"] = (sym, vals)
+            g["stmt"] = Statement("eq", sp.Mul(*[(sym - v) for v in vals]),
+                                  sp.Integer(0), "=", solved=True)
             continue
-        try:
-            cur = parse_statement(text)
-        except ParseError as exc:
-            results[line] = {"verdict": "unknown", "detail": str(exc), "note": ""}
-            prev = None  # can't chain through a line we couldn't read
+        groups.append({"lines": [line], "stmt": stmt, "err": err,
+                       "roots": (frag[0], [frag[1]]) if frag is not None else None})
+
+    last: Statement | None = None
+    for g in groups:
+        cur = g["stmt"]
+        if cur is None:
+            for line in g["lines"]:
+                results[line] = {"verdict": "unknown", "detail": g["err"], "note": ""}
+            if g["err"]:
+                prev = None  # can't chain through a line we couldn't read
             continue
         if prev is None:
             check = StepCheck("unknown")
@@ -614,7 +649,8 @@ def check_steps(problem: str | None, steps: list[tuple[int, str]], target: str |
                 check = compare(prev, cur, tsym)
             except Exception as exc:  # never let one odd line break the board
                 check = StepCheck("unknown", f"sympy error: {exc}")
-        results[line] = {"verdict": check.verdict, "detail": check.detail, "note": check.note}
+        for line in g["lines"]:
+            results[line] = {"verdict": check.verdict, "detail": check.detail, "note": check.note}
         prev = cur
         last = cur
 
