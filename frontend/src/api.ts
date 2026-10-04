@@ -86,6 +86,11 @@ export function checkBoard(problem: string, image: string, lines: number[], tran
   });
 }
 
+/** The rest of the solution, one line per step, continuing from the student's last line. */
+export function finishWork(req: { problem: string; lines: { line: number; text: string }[]; lang: string }) {
+  return post<{ steps: string[] }>("/api/finish", req);
+}
+
 /** The hint ladder for the first wrong turn (fetched after the check, so the check never waits on it). */
 export function fetchHints(req: {
   problem: string;

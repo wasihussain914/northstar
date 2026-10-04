@@ -673,3 +673,27 @@ async def explain_line(problem: str, lines: list[dict], line: int, detail: str, 
               f"Line {line} is the first wrong turn: it does not follow from the line before it"
               f"{' (for you only: ' + detail + ')' if detail else ''}.\n{HINT_RULES}{lang_note(lang)}")
     return await _structured(prompt, EXPLAIN_SCHEMA, max_tokens=4000)
+
+
+FINISH_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "steps": {"type": "array", "items": _str("One line of work, plain text, as the student would write it")},
+    },
+    "required": ["steps"],
+    "additionalProperties": False,
+}
+
+FINISH_RULES = """The student has asked you to finish the solution for them, starting right after their last \
+line. Write the remaining steps exactly as a student would write them on paper: one step per line, plain text \
+(no LaTeX, no words of explanation, no line numbers), using the same notation and style as their lines, \
+with ^ for powers and / for fractions. Carry on from their last line without repeating it, and end with the \
+final answer in solved form (e.g. "x = 6", "x = 0 or x = 5"). At most 8 lines. If their last line is wrong, \
+start from the last correct line and continue from there. If nothing is written yet, start from the problem."""
+
+
+async def finish_work(problem: str, lines: list[dict], lang: str = "en") -> dict:
+    work = "\n".join(f"line {l['line']}: {l['text']}" for l in lines if l.get("text")) or "(nothing yet)"
+    prompt = (f"{FINISH_RULES}{lang_note(lang)}\n\nProblem: {problem or '(not given)'}\n\n"
+              f"The student's work so far:\n{work}")
+    return await _structured(prompt, FINISH_SCHEMA, max_tokens=2000)

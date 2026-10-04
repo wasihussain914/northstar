@@ -458,6 +458,28 @@ class PracticeRequest(BaseModel):
     lang: str = Field(default="en", max_length=8)
 
 
+class FinishRequest(BaseModel):
+    problem: str = Field(default="", max_length=500)
+    # The work so far, as text (typed text or the latex as read), in board order.
+    lines: list[dict] = Field(default_factory=list, max_length=60)
+    lang: str = Field(default="en", max_length=8)
+
+
+@app.post("/api/finish")
+async def finish(req: FinishRequest) -> dict:
+    """Write the rest of the solution, one line per step, from the student's last line."""
+    lines = [{"line": int(l.get("line", i + 1)), "text": str(l.get("text", ""))[:500]}
+             for i, l in enumerate(req.lines)]
+    try:
+        out = await (fake_tutor if FAKE_VISION else tutor).finish_work(req.problem, lines, req.lang)
+    except tutor.TutorError as exc:
+        raise HTTPException(502, str(exc))
+    steps = [str(s).strip() for s in out.get("steps", []) if str(s).strip()][:8]
+    if not steps:
+        raise HTTPException(422, "Couldn't work out the rest of that one.")
+    return {"steps": steps}
+
+
 @app.post("/api/practice")
 async def practice(req: PracticeRequest) -> dict:
     """A detour: one fresh problem exercising the skill the student just got wrong."""

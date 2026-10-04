@@ -13,6 +13,11 @@ export function typedTranscript(strokes: Stroke[]): Record<number, string> | und
   return Object.keys(out).length ? out : undefined;
 }
 
+/** Tag a written line with the text it was made from, so the server gets it verbatim. */
+export function rememberText(strokes: Stroke[], text: string) {
+  if (strokes.length) typed.set(strokes[0], text);
+}
+
 const FONT_FAMILY = '"Bradley Hand", "Noteworthy", "Chalkboard SE", "Comic Sans MS", cursive';
 
 /**

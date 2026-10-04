@@ -28,10 +28,13 @@ interface Props {
   practiceCard?: React.ReactNode;
   /** Where the solution went (the homework doc), shown on the trip summary. */
   docNote?: React.ReactNode;
+  /** Write the rest of the solution on the board, in the loaded handwriting. */
+  onFinish?: () => void;
+  finishing?: boolean;
   children?: React.ReactNode;
 }
 
-export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, lastInkLine, onHint, onNewTrip, nextLabel, practiceCard, docNote, children }: Props) {
+export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, lastInkLine, onHint, onNewTrip, nextLabel, practiceCard, docNote, onFinish, finishing, children }: Props) {
   const { result, errorLine, errorKey, phase, failure } = tutor;
   const [hintsShown, setHintsShown] = useState(0);
   const [showNext, setShowNext] = useState(false);
@@ -89,6 +92,16 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
               Thinking of a hint…
             </button>
           ) : null}
+        </section>
+      )}
+
+      {onFinish && errorLine == null && !result?.arrived && (
+        <section className="card finish-card">
+          <span className="eyebrow">Autopilot</span>
+          <p className="next-hint">Written in your handwriting, straight onto the page. It still gets checked line by line.</p>
+          <button className="btn wide" onClick={onFinish} disabled={finishing}>
+            {finishing ? "Writing…" : phase === "empty" ? "Autofill the solution" : "Finish the rest for me"}
+          </button>
         </section>
       )}
 

@@ -9,7 +9,9 @@ import { sameProblem, useHomework, type HomeworkStep } from "./homework";
 // demo, and the dev helper until the vector glyph renderer can emit strokes.
 import { textToStrokes, typedTranscript } from "./board/handwriting";
 import { AskCard } from "./AskCard";
-import { DEMOS, runDemo } from "./demo";
+import { DEMOS, runDemo, writeLines } from "./demo";
+import { glyphStrokes } from "./board/glyphInk";
+import { finishWork } from "./api";
 import { DestinationCard } from "./DestinationCard";
 import { RecalcBanner, Starburst } from "./Flashes";
 import { FloatingMic } from "./FloatingMic";
@@ -24,7 +26,7 @@ import { useTrip } from "./useTrip";
 import { useTutor } from "./useTutor";
 import { loadDataset } from "./glyphs/lib/loadDataset";
 import type { GlyphLibrary } from "./glyphs/types/handwriting";
-import { prefetchSpeech, setServerTts, setSpeechLang, speak, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
+import { caption, prefetchSpeech, setServerTts, setSpeechLang, speak, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
 
 const PRESETS = [
   "Solve x² = 5x",
@@ -266,7 +268,8 @@ export default function App() {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     (window as unknown as { northstar: object }).northstar = {
-      write: (line: number, text: string) => dispatch({ type: "addMany", strokes: textToStrokes(text, line) }),
+      write: (line: number, text: string) => dispatch({ type: "addMany", strokes: writeRef.current(text, line) }),
+      finish: () => finishRef.current(),
       erase: (line: number) =>
         dispatch({ type: "erase", ids: strokesRef.current.filter((s) => lineOf(s) === line).map((s) => s.id) }),
       clear: () => dispatch({ type: "clear" }),
@@ -418,6 +421,67 @@ export default function App() {
   const demo = useRef<AbortController | null>(null);
   const [demoRunning, setDemoRunning] = useState(false);
   const stopDemo = () => demo.current?.abort();
+
+  // Written lines (typed steps, the demo, autopilot) use the loaded
+  // handwriting when there is one, else the handwriting font.
+  const writeStrokes = useCallback(
+    (text: string, line: number) => (glyphLibrary ? glyphStrokes(text, line, glyphLibrary) : textToStrokes(text, line)),
+    [glyphLibrary],
+  );
+  const writeRef = useRef(writeStrokes);
+  writeRef.current = writeStrokes;
+
+  // Autopilot: the tutor writes the rest of the solution on the page, in
+  // your handwriting, one line at a time. Touching the board stops it.
+  const finisher = useRef<AbortController | null>(null);
+  const [finishing, setFinishing] = useState(false);
+  const stopFinish = () => finisher.current?.abort();
+  const finishIt = async () => {
+    unlockSpeech();
+    stopDemo();
+    stopFinish();
+    const ctrl = new AbortController();
+    finisher.current = ctrl;
+    setFinishing(true);
+    try {
+      // Continue from checked work: if the last line hasn't been read yet, read it first.
+      const waitReady = async () => {
+        const t = tutorRef.current;
+        if (t.phase === "ready" || t.phase === "empty" || t.phase === "failed") return;
+        if (t.phase !== "checking") t.checkNow();
+        const t0 = Date.now();
+        while (Date.now() - t0 < 15000 && !ctrl.signal.aborted) {
+          await new Promise((r) => window.setTimeout(r, 100));
+          const p = tutorRef.current.phase;
+          if (p === "ready" || p === "failed" || p === "empty") return;
+        }
+      };
+      await waitReady();
+      if (ctrl.signal.aborted) return;
+      const current = strokesRef.current;
+      const typed = typedTranscript(current) ?? {};
+      const read = tutorRef.current.result?.lines ?? [];
+      const lines = read
+        .filter((l) => l.status !== "skip" && l.status !== "pending")
+        .map((l) => ({ line: l.line, text: typed[l.line] ?? l.latex }));
+      const used = new Set(current.map(lineOf));
+      const start = (used.size ? Math.max(...used) : 0) + 1;
+      if (start > LINES) return;
+      const { steps } = await finishWork({ problem, lines, lang });
+      if (ctrl.signal.aborted) return;
+      const todo = steps.slice(0, LINES - start + 1).map((text, i) => ({ line: start + i, text }));
+      await writeLines(todo, { add: (s) => dispatch({ type: "addMany", strokes: s }), strokesFor: writeRef.current }, ctrl.signal);
+    } catch (err) {
+      if (!(err instanceof DOMException)) caption(err instanceof Error ? err.message : "Couldn't finish that one.");
+    } finally {
+      if (finisher.current === ctrl) {
+        finisher.current = null;
+        setFinishing(false);
+      }
+    }
+  };
+  const finishRef = useRef(finishIt);
+  finishRef.current = finishIt;
   const startDemo = () => {
     unlockSpeech();
     stopDemo();
@@ -434,6 +498,7 @@ export default function App() {
       },
       clear: () => dispatch({ type: "clear" }),
       add: (s) => dispatch({ type: "addMany", strokes: s }),
+      strokesFor: writeRef.current,
       eraseLine: (line) =>
         dispatch({ type: "erase", ids: strokesRef.current.filter((s) => lineOf(s) === line).map((s) => s.id) }),
       state: () => {
@@ -480,7 +545,7 @@ export default function App() {
           </ToolButton>
           <span className="pill-divider" />
           <ToolButton
-            onClick={() => exportBoardPdf({ problem, strokes, student: homework.doc.student, course: homework.doc.course })}
+            onClick={() => exportBoardPdf({ problem, strokes, student: homework.doc.student, course: homework.doc.course, library: glyphLibrary })}
             disabled={!strokes.length}
             label="Download this page as a PDF"
           >
@@ -579,6 +644,22 @@ export default function App() {
             <RecalcBanner errorKey={tutor.errorKey} line={tutor.errorLine} />
             <Starburst fireKey={arrived ? problem : ""} />
             <FloatingMic problem={problem} strokes={strokes} result={tutor.result} voiceOn={voiceOn} lang={lang} />
+            {!arrived && (
+              <button
+                className={`autofill-btn glass${finishing ? " writing" : ""}`}
+                onClick={finishing ? stopFinish : finishIt}
+                title={finishing ? "Stop writing" : "Write the whole solution on the page, in your handwriting"}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  {finishing ? (
+                    <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" />
+                  ) : (
+                    <path d="M4 20l1.5-5L16 4.5a2.1 2.1 0 013 3L8.5 18 4 20zM13.5 7l3.5 3.5M9 13l2 2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  )}
+                </svg>
+                {finishing ? "Writing… tap to stop" : strokes.length ? "Finish the solution" : "Autofill the solution"}
+              </button>
+            )}
             <Mascot mood={pipMood(tutor, arrived)} voiceOn={voiceOn} besideDrawer={panelOpen} />
             <Board
               strokes={strokes}
@@ -596,6 +677,7 @@ export default function App() {
               onInteract={() => {
                 unlockSpeech();
                 stopDemo();
+                stopFinish();
               }}
               theme={theme}
             />
@@ -626,6 +708,8 @@ export default function App() {
             trip={trip}
             lastInkLine={lastUsed || null}
             onHint={handleHint}
+            onFinish={finishIt}
+            finishing={finishing}
             onNewTrip={advance}
             nextLabel={hasNextStop ? `Next stop · ${stopIndex + 2} of ${stops.length}` : "New problem"}
             docNote={
