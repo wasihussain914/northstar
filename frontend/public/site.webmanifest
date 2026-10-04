@@ -1,12 +1,12 @@
 {
-  "name": "North Star",
-  "short_name": "North Star",
+  "name": "Untangled",
+  "short_name": "Untangled",
   "description": "A GPS for solving math",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0a0f1f",
-  "theme_color": "#0a0f1f",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }

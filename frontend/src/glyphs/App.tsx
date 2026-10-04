@@ -68,7 +68,7 @@ export default function GlyphsApp() {
     <div className="glyphs-root">
       <header className="glyphs-header">
         <h1 className="glyphs-title">Handwriting Glyph Renderer</h1>
-        <a href="/" className="back-link">← North Star</a>
+        <a href="/" className="back-link">← Untangled</a>
       </header>
 
       <main className="glyphs-main">

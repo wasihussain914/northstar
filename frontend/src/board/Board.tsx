@@ -22,6 +22,39 @@ import type { GlyphLibrary } from "../glyphs/types/handwriting";
 
 export type Tool = "pen" | "eraser" | "scroll";
 
+/** Circle the handwriting on a flagged line. */
+function drawMistakeMark(
+  ctx: CanvasRenderingContext2D,
+  strokes: Stroke[],
+  errorLine: number,
+  color: string,
+) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const s of strokes) {
+    if (lineOf(s) !== errorLine) continue;
+    minX = Math.min(minX, s.box.minX);
+    minY = Math.min(minY, s.box.minY);
+    maxX = Math.max(maxX, s.box.maxX);
+    maxY = Math.max(maxY, s.box.maxY);
+  }
+  if (!Number.isFinite(minX)) return;
+
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const rx = Math.max(22, (maxX - minX) / 2 + 16);
+  const ry = Math.max(16, (maxY - minY) / 2 + 12);
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, -0.05, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 export interface Marker {
   status: LineStatus | "checking";
   source?: "verified" | "ai";
@@ -51,12 +84,13 @@ interface Props {
   onErase: (ids: number[]) => void;
   onSelectLine: (line: number) => void;
   onInteract: () => void;
+  /** Light or dark page; the canvas redraws its ink in the theme's colours. */
+  theme: "light" | "dark";
 }
 
 const ERASER_R = 14;
 const TEACHER_FONT_HEIGHT = 20;          // smaller so it doesn't crowd the student's work
 const TEACHER_FONT_HEIGHT_ABOVE = 16;    // even smaller when placed above the line
-const TEACHER_COLOR = "#c62828";
 const TEACHER_STROKE_WIDTH = 1.4;
 
 /** Stored layout + progress for the animated teacher annotation. */
@@ -68,9 +102,13 @@ type TeacherState = {
   pointsPerFrame: number; // advances fast enough to finish in ~1 second
 };
 
+<<<<<<< HEAD
 export function Board({ strokes, problem, promptStart, tool, markers, errorLine, selectedLine, teacherInk, glyphLibrary, onAdd, onErase, onSelectLine, onInteract }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pan = useRef<{ pointerId: number; y: number; scrollTop: number } | null>(null);
+=======
+export function Board({ strokes, problem, promptStart, tool, markers, errorLine, selectedLine, teacherInk, glyphLibrary, onAdd, onErase, onSelectLine, onInteract, theme }: Props) {
+>>>>>>> origin/main
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(800);
@@ -121,14 +159,19 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
       canvas.height = pxH;
     }
     const ctx = canvas.getContext("2d")!;
+    // Ink and rule colours come from the stylesheet, so they follow light/dark mode.
+    const css = getComputedStyle(canvas);
+    const color = (name: string) => css.getPropertyValue(name).trim();
+    const ink = color("--ink");
+    const teacher = color("--teacher");
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
     ctx.clearRect(0, 0, boardW, paperH);
 
-    ctx.fillStyle = "rgba(29, 78, 216, 0.045)";
+    ctx.fillStyle = color("--q-band-bg");
     ctx.fillRect(0, 0, boardW, LINE_H);
-    ctx.fillStyle = "#171b26";
+    ctx.fillStyle = ink;
     for (const s of question) ctx.fill(strokePath(s));
-    ctx.strokeStyle = "#c5cedd";
+    ctx.strokeStyle = color("--rule-strong");
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, LINE_H + 0.5);
@@ -140,33 +183,33 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
 
     if (errorLine) {
       const y = (errorLine - 1) * LINE_H;
-      ctx.fillStyle = "rgba(245, 158, 11, 0.10)";
+      ctx.fillStyle = color("--row-error");
       ctx.fillRect(0, y, boardW, LINE_H);
-      ctx.fillStyle = "rgba(245, 158, 11, 0.85)";
+      ctx.fillStyle = color("--amber");
       ctx.fillRect(0, y + 6, 3, LINE_H - 12);
     }
     if (selectedLine && selectedLine !== errorLine) {
-      ctx.fillStyle = "rgba(59, 130, 246, 0.07)";
+      ctx.fillStyle = color("--row-selected");
       ctx.fillRect(0, (selectedLine - 1) * LINE_H, boardW, LINE_H);
     }
     if (promptStart && errorLine !== 1) {
-      ctx.fillStyle = "rgba(59, 130, 246, 0.08)";
+      ctx.fillStyle = color("--row-prompt");
       ctx.fillRect(0, 0, boardW, LINE_H);
-      ctx.fillStyle = "rgba(29, 78, 216, 0.9)";
+      ctx.fillStyle = color("--prompt-bar");
       ctx.fillRect(0, 6, 3, LINE_H - 12);
       ctx.font = '30px "Bradley Hand", "Noteworthy", "Chalkboard SE", cursive';
       ctx.textBaseline = "middle";
-      // Leave the right side clear: the status pill sits on this line.
+      // Leave a little room on the right so the hint never runs under the tools.
       const room = boardW - 36 - 176 / Math.max(scale, 0.01);
       const phrase = ["Write your first step here", "First step"].find((p) => ctx.measureText(p).width <= room);
       if (phrase) {
-        ctx.fillStyle = "rgba(92, 107, 130, 0.55)";
+        ctx.fillStyle = color("--prompt-text");
         ctx.fillText(phrase, 28, LINE_H * 0.5);
       }
       ctx.textBaseline = "alphabetic";
     }
 
-    ctx.strokeStyle = "#d6deea";
+    ctx.strokeStyle = color("--rule");
     ctx.lineWidth = 1;
     for (let l = 1; l < LINES; l++) {
       const y = l * LINE_H + 0.5;
@@ -178,20 +221,22 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
 
     const hidden = erasing.current;
     for (const s of strokes) {
-      ctx.fillStyle = hidden?.has(s.id) ? "rgba(23, 27, 38, 0.18)" : "#171b26";
+      ctx.fillStyle = hidden?.has(s.id) ? color("--ink-ghost") : ink;
       ctx.fill(strokePath(s));
     }
     if (committing.current) {
       if (strokes.includes(committing.current)) committing.current = null;
       else {
-        ctx.fillStyle = "#171b26";
+        ctx.fillStyle = ink;
         ctx.fill(strokePath(committing.current));
       }
     }
     if (live.current && live.current.points.length) {
-      ctx.fillStyle = "#171b26";
+      ctx.fillStyle = ink;
       ctx.fill(outlinePath(live.current.points, live.current.pen, false));
     }
+
+    if (errorLine) drawMistakeMark(ctx, strokes, errorLine, teacher);
 
     // Red teacher annotation — rendered via personal glyph library
     const ts = teacherStateRef.current;
@@ -202,7 +247,7 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
         if (layout.type === "space" || !layout.glyph) continue;
         drawGlyph(ctx, layout.glyph, layout.placeX, layout.baseline, {
           ...layout.drawOpts,
-          strokeStyle: TEACHER_COLOR,
+          strokeStyle: teacher,
         });
       }
       // Draw the in-progress glyph partially
@@ -212,12 +257,12 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
           // All strokes before the current one, fully drawn
           for (let s = 0; s < ts.si; s++) {
             drawGlyphPartialStroke(ctx, layout.glyph, layout.placeX, layout.baseline,
-              { ...layout.drawOpts, strokeStyle: TEACHER_COLOR },
+              { ...layout.drawOpts, strokeStyle: teacher },
               s, layout.glyph.strokes[s]?.length ?? 0);
           }
           // Current stroke, partially drawn
           drawGlyphPartialStroke(ctx, layout.glyph, layout.placeX, layout.baseline,
-            { ...layout.drawOpts, strokeStyle: TEACHER_COLOR },
+            { ...layout.drawOpts, strokeStyle: teacher },
             ts.si, ts.pi);
         }
       }
@@ -225,14 +270,14 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
 
     if (eraserPos.current) {
       const [x, y] = eraserPos.current;
-      ctx.strokeStyle = "rgba(23, 27, 38, 0.45)";
+      ctx.strokeStyle = color("--eraser");
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(x, y, ERASER_R, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.restore();
-  }, [strokes, question, width, boardW, scale, paperH, errorLine, selectedLine, promptStart]);
+  }, [strokes, question, width, boardW, scale, paperH, errorLine, selectedLine, promptStart, theme]);
 
   // Scheduled frames must use the newest props, not the ones from when they were scheduled.
   const drawRef = useRef(draw);
@@ -517,7 +562,6 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
                 aria-label={m ? `Line ${line}: ${describe(m)}` : `Line ${line}`}
                 title={m ? describe(m) : undefined}
               >
-                <span className="line-no">{line}</span>
                 {m && <MarkerIcon marker={m} />}
               </button>
             );
@@ -574,8 +618,7 @@ export function MarkerIcon({ marker }: { marker: Marker }) {
       return (
         <span className="marker error">
           <svg viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M10 2.5c-3.1 0-5.5 2.4-5.5 5.4 0 4 5.5 9.6 5.5 9.6s5.5-5.6 5.5-9.6c0-3-2.4-5.4-5.5-5.4z" fill="currentColor" />
-            <circle cx="10" cy="8" r="2.1" fill="#fff" />
+            <path d="M6.5 6.5l7 7M13.5 6.5l-7 7" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
           </svg>
         </span>
       );

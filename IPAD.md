@@ -1,4 +1,4 @@
-# Run North Star on an iPad
+# Run Untangled on an iPad
 
 The iPad does not get a copy of this repo. It is the screen and the pencil. Your Windows PC stays the server: it runs the web app and the API, and it is the only machine that holds the API key.
 
@@ -19,7 +19,7 @@ iPad Safari  --Wi-Fi-->  PC :5173 (Vite, npm run dev)
 | iPad and PC on the same Wi-Fi, devices can see each other | [Same network](#1-same-network-use-this-first) |
 | Venue Wi-Fi isolates clients (common on guest and campus Wi-Fi) | [Phone hotspot](#2-phone-hotspot) |
 | iPad is on cellular, or you are not next to the PC | [Tunnel](#3-tunnel-when-you-are-not-on-the-same-network) |
-| You want the mic (“Ask North Star” by voice) | Tunnel. iOS only allows speech recognition on HTTPS. Drawing, typed steps, checks, and the GPS voice work on plain `http://` |
+| You want the mic (“Ask Untangled” by voice) | Tunnel. iOS only allows speech recognition on HTTPS. Drawing, typed steps, checks, and the GPS voice work on plain `http://` |
 
 Putting the Python or Node project on the iPad (Files, Working Copy, a-Shell, iSH) does not run this app. The API needs Python, uv, SymPy, and your key. Leave that on the PC.
 
@@ -65,8 +65,8 @@ If you use Git Bash, `./dev.sh` starts both. It will not work in PowerShell.
 If Windows Firewall asks, allow **Node** and **Python** on **Private** networks. If no prompt appears and the iPad cannot connect, allow ports 5173 and 8000 on private networks only:
 
 ```powershell
-New-NetFirewallRule -DisplayName "North Star Vite" -Direction Inbound -Protocol TCP -LocalPort 5173 -Action Allow -Profile Private
-New-NetFirewallRule -DisplayName "North Star API" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow -Profile Private
+New-NetFirewallRule -DisplayName "Untangled Vite" -Direction Inbound -Protocol TCP -LocalPort 5173 -Action Allow -Profile Private
+New-NetFirewallRule -DisplayName "Untangled API" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow -Profile Private
 ```
 
 Leave the PC awake and both windows running. A sleep or a closed terminal drops the iPad.
@@ -118,7 +118,7 @@ Start the API and `npm run dev` first, then the tunnel. On the iPad, open the `h
 
 A public tunnel to **5173** is not enough by itself: the page calls the API at `http://<VITE_BACKEND_IP>:8000`. Same-network testing should set that IP (and `LOCAL_IP` on the API). Tunneling only the API leaves the iPad with nothing to draw on.
 
-HTTPS is what unlocks the microphone for Ask North Star. Spoken GPS replies (`speechSynthesis`) already work on the plain LAN `http://` URL.
+HTTPS is what unlocks the microphone for Ask Untangled. Spoken GPS replies (`speechSynthesis`) already work on the plain LAN `http://` URL.
 
 Tailscale is the private version of the same idea: install it on the PC and the iPad, then open `http://<tailscale-ip>:5173`. No public link, and the mic still needs a real HTTPS URL if you care about voice input.
 

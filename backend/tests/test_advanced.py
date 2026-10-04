@@ -258,3 +258,31 @@ def test_matrix_injection_is_still_rejected():
         parse_statement("[x for x in range(3)]")
     with pytest.raises(ParseError):
         parse_statement("Matrix(__import__('os'))")
+
+
+# --- integration by parts / substitution bookkeeping ----------------------
+
+def test_by_parts_bookkeeping_is_verified():
+    # The full classic layout: picks are definitions, differentials are provable.
+    good, arrived = line_verdicts(
+        "integrate(x^2*exp(x), x)",
+        ["u = x^2", "du = 2*x*dx", "dv = exp(x)*dx", "v = exp(x)",
+         "x^2*exp(x) - 2*x*exp(x) + 2*exp(x) + C"])
+    assert good == {1: "valid", 2: "valid", 3: "valid", 4: "valid", 5: "valid"}
+    assert arrived
+
+
+def test_wrong_differential_is_flagged():
+    bad, arrived = line_verdicts("integrate(x^2*exp(x), x)", ["u = x^2", "du = x*dx"])
+    assert bad == {1: "valid", 2: "invalid"} and not arrived
+    # Forgetting the dx reads as "du = 2x", which isn't a differential in x at
+    # all — that stays unknown (AI judges it) rather than falsely flagged.
+    unk, _ = line_verdicts("integrate(x^2*exp(x), x)", ["u = x^2", "du = 2*x"])
+    assert unk[2] == "unknown"
+
+
+def test_differential_forms_spaced_and_slash():
+    ok, _ = line_verdicts("integrate(2*x*cos(x^2), x)", ["u = x^2", "du = 2x dx"])
+    assert ok == {1: "valid", 2: "valid"}
+    ok, _ = line_verdicts("integrate(2*x*cos(x^2), x)", ["u = x^2", "du/dx = 2*x"])
+    assert ok == {1: "valid", 2: "valid"}

@@ -31,7 +31,7 @@ interface Props {
 const VERDICT_LABEL = { good: "Route looks good", partial: "Almost a route", off: "That route won't get there" };
 
 /**
- * Route preview: before the pen touches the paper, North Star asks how you'd
+ * Route preview: before the pen touches the paper, Untangled asks how you'd
  * solve the whole problem. Say it or type it; the navigator checks the route.
  */
 export function PlanCard({ problem, lang, voiceOn, onClose }: Props) {

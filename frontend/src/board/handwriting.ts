@@ -16,8 +16,17 @@ export function typedTranscript(strokes: Stroke[]): Record<number, string> | und
   return Object.keys(out).length ? out : undefined;
 }
 
+<<<<<<< HEAD
 /** Large enough to fill a ruled line; not the 20px red margin-note size. */
 const FIX_FONT_HEIGHT = Math.round(LINE_H * 0.58);
+=======
+/** Tag a written line with the text it was made from, so the server gets it verbatim. */
+export function rememberText(strokes: Stroke[], text: string) {
+  if (strokes.length) typed.set(strokes[0], text);
+}
+
+const FONT_FAMILY = '"Bradley Hand", "Noteworthy", "Chalkboard SE", "Comic Sans MS", cursive';
+>>>>>>> origin/main
 
 /**
  * Turn plain text into black board strokes on a ruled line, using the personal

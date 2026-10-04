@@ -46,6 +46,9 @@ def _problem_math(problem: str) -> str:
 
 
 def _kind(text: str) -> str:
+    lower = text.lower()
+    if "?" in text or lower.startswith(("help", "what", "how", "why", "im not sure", "i'm not sure")):
+        return "question"
     if any(op in text for op in ("<", ">", "≤", "≥")):
         return "inequality"
     return "equation" if "=" in text else "expression"
@@ -127,5 +130,48 @@ async def explain_line(problem: str, lines: list[dict], line: int, detail: str, 
 
 
 async def ask(problem: str, question: str, image_png_b64: str | None, transcript: dict[int, str] | None,
-              context: str, lang: str = "en") -> dict:
-    return {"answer": f"(fake mode) You asked: {question}. Try comparing each line with the one above it."}
+              context: str, lang: str = "en", want_ink: bool = False) -> dict:
+    out = {"answer": f"(fake mode) You asked: {question}. Try comparing each line with the one above it."}
+    if want_ink:
+        out["ink"] = "compare with above"
+    return out
+
+
+_CANNED_FINISH = {
+    "2(x - 3) + 4 = 10": ["2x - 6 + 4 = 10", "2x - 2 = 10", "2x = 12", "x = 6"],
+    "x/3 + 1 = 5": ["x/3 = 4", "x = 12"],
+    "x^2 = 5x": ["x^2 - 5x = 0", "x(x - 5) = 0", "x = 0 or x = 5"],
+}
+
+
+def _norm(text: str) -> str:
+    return re.sub(r"\s+", "", text.replace("−", "-").replace("²", "^2")).lower()
+
+
+async def finish_work(problem: str, lines: list[dict], lang: str = "en") -> dict:
+    """Finish the solve without a model: a canned route for the demo problems,
+    else just the solved form from SymPy."""
+    math = _norm(_problem_math(problem))
+    written = [_norm(l.get("text", "")) for l in lines if l.get("text")]
+    for key, route in _CANNED_FINISH.items():
+        if _norm(key) == math:
+            done = 0
+            for i, step in enumerate(route):
+                if _norm(step) in written:
+                    done = i + 1
+            return {"steps": route[done:]}
+    try:
+        import sympy as sp
+        src = _problem_math(problem).replace("−", "-").replace("²", "^2").replace("^", "**")
+        src = re.sub(r"(\d)([a-z(])", r"\1*\2", src)
+        lhs, rhs = src.split("=", 1)
+        expr = sp.sympify(lhs) - sp.sympify(rhs)
+        var = sorted(expr.free_symbols, key=str)
+        if len(var) != 1:
+            raise ValueError("not a single-variable equation")
+        roots = sp.solve(expr, var[0])
+        if not roots:
+            raise ValueError("no solution")
+        return {"steps": [" or ".join(f"{var[0]} = {sp.nsimplify(r)}" for r in roots)]}
+    except Exception as exc:  # noqa: BLE001
+        raise TutorError("Fake mode can only finish simple single-variable equations.") from exc

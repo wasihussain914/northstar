@@ -162,6 +162,9 @@ class Statement:
     lhs: sp.Basic
     rhs: sp.Expr | None = None
     rel: str = "="
+    # Built from an explicit list of roots ("x = 0 or x = 5"): counts as
+    # solved form even though the variable isn't alone on one side.
+    solved: bool = False
 
     @property
     def free(self) -> set[sp.Symbol]:
@@ -283,7 +286,46 @@ def parse_statement(text: str, *, evaluate: bool = True) -> Statement:
             raise ParseError("a matrix can't be part of a relation")
         kind = "eq" if op == "=" else "ineq"
         return Statement(kind, left, right, op)
+    roots = _parse_roots(text)
+    if roots is not None:
+        return roots
     raise ParseError("more than one relation on a line")
+
+
+def _parse_roots(text: str) -> Statement | None:
+    """An explicit list of solutions: 'x = 0 or x = 5', also comma-separated.
+
+    Collapsed into the equation (x - 0)(x - 5) = 0, whose solution set is the
+    answer, and marked solved so the board can arrive on it.
+    """
+    parts = re.split(r"\s+(?:or|and)\s+|[,;]", text)
+    if len(parts) < 2:
+        return None
+    sym = None
+    vals = []
+    for part in parts:
+        part = part.strip()
+        if not part:
+            return None
+        try:
+            stmt = parse_statement(part)
+        except ParseError:
+            return None
+        if stmt.kind != "eq" or stmt.rhs is None:
+            return None
+        if isinstance(stmt.lhs, sp.Symbol) and not stmt.rhs.free_symbols:
+            s, v = stmt.lhs, stmt.rhs
+        elif isinstance(stmt.rhs, sp.Symbol) and not stmt.lhs.free_symbols:
+            s, v = stmt.rhs, stmt.lhs
+        else:
+            return None
+        if sym is None:
+            sym = s
+        elif s != sym:
+            return None
+        vals.append(v)
+    product = sp.Mul(*[(sym - v) for v in vals])
+    return Statement("eq", product, sp.Integer(0), "=", solved=True)
 
 
 # --------------------------------------------------------------------------
@@ -511,8 +553,21 @@ def compare(prev: Statement, cur: Statement, target: sp.Symbol | None = None) ->
     return StepCheck("unknown")
 
 
+def _root_fragment(stmt: Statement) -> tuple[sp.Symbol, sp.Expr] | None:
+    """'x = 3' (or '3 = x') with a constant value: one root of a solution list."""
+    if stmt.kind != "eq" or stmt.rhs is None or stmt.solved:
+        return None
+    if isinstance(stmt.lhs, sp.Symbol) and not stmt.rhs.free_symbols:
+        return stmt.lhs, stmt.rhs
+    if isinstance(stmt.rhs, sp.Symbol) and not stmt.lhs.free_symbols:
+        return stmt.rhs, stmt.lhs
+    return None
+
+
 def is_solved_form(stmt: Statement, target: sp.Symbol) -> bool:
-    """'x = 4', '4 = x', 'x > 3': the target variable alone on one side."""
+    """'x = 4', '4 = x', 'x > 3', or an explicit root list ('x = 0 or x = 5')."""
+    if stmt.solved:
+        return target in getattr(stmt.lhs, "free_symbols", set())
     if stmt.kind == "expr" or stmt.rhs is None:
         return False
     if stmt.lhs == target and target not in stmt.rhs.free_symbols:
@@ -687,16 +742,44 @@ def check_steps(problem: str | None, steps: list[tuple[int, str]], target: str |
     except Exception:
         reference = None
 
+<<<<<<< HEAD
     arrived = False
+=======
+    # Parse everything first so a run of single-root lines ("x = 0" beside or
+    # under "x = 5") can be read together as one root list — students and the
+    # handwriting reader both split a quadratic's answers across lines.
+    groups: list[dict] = []  # {"lines": [...], "stmt": Statement|None, "err": str, "roots": (sym, [vals])|None}
+>>>>>>> origin/main
     for line, text in steps:
-        if not text.strip():
-            results[line] = {"verdict": "unknown", "detail": "", "note": ""}
+        stmt: Statement | None = None
+        err = ""
+        if text.strip():
+            try:
+                stmt = parse_statement(text)
+            except ParseError as exc:
+                err = str(exc)
+        frag = _root_fragment(stmt) if stmt is not None else None
+        if frag is not None and groups and groups[-1]["roots"] is not None \
+                and groups[-1]["roots"][0] == frag[0]:
+            g = groups[-1]
+            sym, vals = g["roots"]
+            vals = vals + [frag[1]]
+            g["lines"] = g["lines"] + [line]
+            g["roots"] = (sym, vals)
+            g["stmt"] = Statement("eq", sp.Mul(*[(sym - v) for v in vals]),
+                                  sp.Integer(0), "=", solved=True)
             continue
-        try:
-            cur = parse_statement(text)
-        except ParseError as exc:
-            results[line] = {"verdict": "unknown", "detail": str(exc), "note": ""}
-            prev = None  # can't chain through a line we couldn't read
+        groups.append({"lines": [line], "stmt": stmt, "err": err,
+                       "roots": (frag[0], [frag[1]]) if frag is not None else None})
+
+    last: Statement | None = None
+    for g in groups:
+        cur = g["stmt"]
+        if cur is None:
+            for line in g["lines"]:
+                results[line] = {"verdict": "unknown", "detail": g["err"], "note": ""}
+            if g["err"]:
+                prev = None  # can't chain through a line we couldn't read
             continue
         cur = _answer_statement(cur, original, tsym, text)
         if prev is None:
@@ -706,6 +789,7 @@ def check_steps(problem: str | None, steps: list[tuple[int, str]], target: str |
                 check = compare(prev, cur, tsym)
             except Exception as exc:  # never let one odd line break the board
                 check = StepCheck("unknown", f"sympy error: {exc}")
+<<<<<<< HEAD
         try:
             final_answer = _is_final_answer(cur, original, tsym, text, reference)
         except Exception:
@@ -713,6 +797,10 @@ def check_steps(problem: str | None, steps: list[tuple[int, str]], target: str |
         results[line] = {"verdict": check.verdict, "detail": check.detail, "note": check.note,
                          "final_answer": final_answer}
         arrived = arrived or final_answer
+=======
+        for line in g["lines"]:
+            results[line] = {"verdict": check.verdict, "detail": check.detail, "note": check.note}
+>>>>>>> origin/main
         prev = cur
 
     arrived = arrived and not any(r["verdict"] == "invalid" for r in results.values())

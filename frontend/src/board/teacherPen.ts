@@ -248,7 +248,7 @@ export function drawTeacherAnim(
 ): void {
   if (revealed <= 0) return;
 
-  ctx.fillStyle = "#c62828"; // teacher red
+  ctx.fillStyle = "#ff6a5a"; // teacher red, bright enough for the dark page
 
   for (const ts of anim.strokes) {
     const endIdx = revealed - ts.startIdx;
