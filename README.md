@@ -1,12 +1,14 @@
 <img width="2172" height="724" alt="EED5AB45-0FA7-475D-87C9-C79B46261CC8" src="https://github.com/user-attachments/assets/257002b2-9887-40da-baff-aae21b1c7586" />
 
+# Untangled
+
 ### A GPS for solving math. You do the driving.
 
-Untangled is a personalized AI tutor that navigates your reasoning as you solve.
+Untangled is an AI tutor that **navigates your reasoning as you solve**.
 
-Work naturally on a digital whiteboard. Untangled follows your work line by line, verifies your reasoning in the background, and stays quiet while you're on track. The moment you take a wrong turn, it marks the exact step, says **"Recalculating,"** and gives you progressively stronger hints to help you find your own way back.
+Work naturally on a digital whiteboard. Untangled follows your work line by line and verifies your reasoning in the background. When you take a wrong turn, it marks the exact step, says **"Recalculating,"** and gives you progressively stronger hints to help you find your own way back.
 
-It doesn't hand you the destination. It gives you turn-by-turn guidance.
+It doesn't hand you the destination. **It gives you turn-by-turn guidance.**
 
 **Built for Cornell Hacks 2026 — Theme: Navigation.**
 
@@ -18,133 +20,162 @@ You make a mistake on **line 2**.
 
 You realize it on **line 12**.
 
-The expensive part isn't the mistake — it's everything you do before realizing where you went wrong.
+Most AI study tools either give you the entire solution or force you into a loop of:
 
-Most AI study tools don't solve this problem. They turn learning into a back-and-forth chat:
+> photo → upload → wait → answer → repeat
 
-**take a photo → upload → wait → get an answer → repeat**
+But when you're solving a problem, you don't need someone to hand you the destination.
 
-Or they simply generate the entire solution.
-
-But when you're actually solving a problem, what you need isn't someone to hand you the destination. You need to know **when you took a wrong turn.**
-
-That's what Untangled is built for.
+You need to know **the moment you take a wrong turn.**
 
 ---
 
-## The Idea: Turn-by-Turn for Your Thinking
+## How Untangled Works
 
-A GPS doesn't drive the car for you.
+A GPS doesn't drive the car for you. It watches your route, stays quiet while you're on track, and speaks up when you miss a turn.
 
-It watches your route, stays quiet while you're going the right way, and speaks up when you miss a turn.
+**Untangled does the same for math.**
 
-**Untangled does the same thing for math.**
+```text
+You write
+   ↓
+Vision model reads your handwriting
+   ↓
+SymPy verifies the math
+   ↓
+Wrong turn?
+   ↓
+📍 Mark the exact line
+🔊 "Recalculating."
+💡 Give a hint
+   ↓
+✓ Back on route
+```
 
-You solve the problem yourself. Untangled follows along in the background.
+Untangled separates **reading** from **checking**. A vision-capable model converts handwritten work into structured math, while SymPy verifies supported transformations symbolically. If a step can't be verified symbolically, Untangled can fall back to an AI judgment and labels it accordingly.
 
-When your reasoning is valid:
-
-> ✓ On route.
-
-When a step breaks:
-
-> 📍 Wrong turn — Line 3  
-> 🔊 "Recalculating."
-
-And once you've corrected it:
-
-> ✓ Back on route.
-
-The goal isn't to get you to the answer as quickly as possible.
-
-The goal is to help you understand **how to get there yourself.**
+The result: **Ink → Model → Algebra → Pedagogy.**
 
 ---
 
-## What Untangled Does
+## Features
 
-### ✍️ Follows your work as you write
+### 📍 First Wrong-Turn Detection
+Untangled identifies the **first line where your reasoning breaks**, rather than flagging every later step caused by the same mistake.
 
-Solve naturally with a stylus, mouse, touch, or keyboard.
+### 💡 Progressive Hint Ladder
+Instead of revealing the solution immediately:
 
-Untangled groups your writing into lines and creates checkpoints as you work. Starting a new line triggers a check of the line you just completed, while a short pause checks the current board.
+**Nudge → Direction → Correction**
 
-That means feedback arrives **during the solving process**, not after you've already finished.
+You choose how much help you need.
 
-### 📍 Finds the first wrong turn
+### 🔊 GPS-Style Voice
+Untangled stays quiet when you're on track.
 
-Untangled doesn't mark every line downstream of a mistake as wrong.
+> **"Recalculating."** — wrong turn  
+> **"Back on route."** — corrected  
+> **"You have arrived."** — solved
 
-It identifies the moment your reasoning first went off route.
+### ✍️ Live Whiteboard
+Solve naturally using a **stylus, touch, mouse, or keyboard**. Untangled checks completed lines and pauses so feedback can arrive while you're still working.
 
-If line 3 contains the actual mistake and lines 4–6 correctly continue from that mistaken assumption, **line 3 is the wrong turn.**
-
-That's the line Untangled points you back to.
-
-### 🧭 Guides instead of solving
-
-Untangled doesn't immediately reveal the answer.
-
-Hints form a ladder:
-
-1. **Nudge** — points you toward where to look
-2. **Direction** — reminds you of the relevant rule or idea
-3. **Correction** — shows how that specific step should change
-
-You climb only as far as you need.
-
-The final destination is still yours to reach.
-
-### 🔊 Speaks like a GPS
-
-Untangled intentionally stays quiet while you're solving correctly.
-
-When you miss a turn, it can speak:
-
-> "Recalculating."
-
-Fix your reasoning:
-
-> "Back on route."
-
-Finish the problem:
-
-> "You have arrived."
-
-The voice isn't constant narration. It follows a **navigation policy** designed to intervene only when useful.
+### 📷 Homework Scanner
+Import a photo or PDF, select a problem, and turn it into your **destination**.
 
 ### 💬 Ask Untangled
+Ask questions by voice or keyboard. Untangled uses your current board and verification context to answer without immediately giving away the solution.
 
-Need clarification?
+### 🌎 Multilingual
+Guidance is available in **English, Spanish, French, Chinese, Hindi, and Bengali.**
 
-Ask by microphone or keyboard:
+---
 
-> "Why is line 2 wrong?"
+## Tech Stack
 
-Untangled sees your current whiteboard and the most recent verification result, so its response is grounded in what you're actually doing.
+**Frontend:** React 19 · TypeScript · Vite · perfect-freehand · KaTeX · PDF.js
 
-Responses stay concise and avoid giving away the final answer.
+**Backend:** Python · FastAPI · Pydantic · SymPy
 
-### 📷 Turn homework into a route
+**AI:** Claude · Gemini · Grok · ElevenLabs
 
-Import a photo or PDF of your homework and drag a box around the problem you want to solve.
+We deliberately split the system into two jobs:
 
-Untangled reads it and turns it into your **destination**.
+- **AI reads** messy handwriting and provides tutoring.
+- **SymPy verifies** the mathematics whenever possible.
 
-Scan an entire worksheet and each problem can become another stop on the trip.
+This reduces hallucinations while keeping the system flexible enough to understand real handwritten work.
 
-### 🌎 Navigate in your language
+---
 
-Guidance is available in six interface/guidance languages:
+## Run It Yourself
 
-- English
-- Español
-- Français
-- 中文
-- हिन्दी
-- বাংলা
+### Prerequisites
 
-Hints, spoken feedback, encouragement, and Ask Untangled responses change language while the underlying mathematics stays the same.
+- Python 3.11+
+- `uv`
+- Node.js 20+
+- API key for a supported model provider
+
+### 1. Clone
+
+```bash
+git clone https://github.com/wasihussain914/northstar.git
+cd northstar
+```
+
+### 2. Configure
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+Add your provider key to `backend/.env`.
+
+For Claude:
+
+```env
+ANTHROPIC_API_KEY=your_key_here
+```
+
+Claude is the default provider. Gemini and Grok are also supported.
+
+For local development, leave `VITE_BACKEND_IP` unset.
+
+### 3. Run
+
+```bash
+./dev.sh
+```
+
+Or start each service separately:
+
+**Backend**
+
+```bash
+cd backend
+uv sync
+uv run uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+**Frontend**
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Then open the URL printed by Vite, usually:
+
+```text
+http://localhost:5173
+```
+
+For phone/iPad setup on the same Wi-Fi, see `IPAD.md`.
+
+> ⚠️ Never commit API keys.
 
 ---
 
@@ -185,3 +216,5 @@ your handwriting
    📍 exact line
    🔊 GPS feedback
    💡 hint ladder
+
+**A GPS for solving math. You do the driving.**
