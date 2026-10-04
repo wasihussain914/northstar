@@ -197,9 +197,10 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean, l
       return;
     }
     if (v.hadError) {
+      // Recovered: the line's checkmark turning green is signal enough —
+      // announcing "back on route" fires too eagerly (e.g. on a bare erase).
       v.hadError = false;
       v.errorKey = "";
-      if (!res.arrived) say(PHRASES[latest.current.lang].backOnRoute);
     }
     if (res.arrived && !v.arrived) {
       v.arrived = true;
