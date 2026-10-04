@@ -165,7 +165,7 @@ Then guide the student:
 doing it. Empty if finished or if there is an error.
 - next_step_ink: a very short phrase (at most four words) matching next_step_hint for a teacher's red margin note, \
 e.g. "isolate the variable", "combine terms". Empty if there is an error or the work is finished.
-- on_track_message: a few warm words of encouragement that fit where they are.
+- on_track_message: a few warm words of encouragement that fit where they are (at most ten words).
 - eta_steps: your estimate of how many more lines a typical student needs to reach the answer from here.
 - route_note: if there is a noticeably shorter or cleaner route than the one they are taking, mention it in one \
 sentence without solving. Otherwise empty.
@@ -500,15 +500,25 @@ async def _structured(content: list[dict] | str, schema: dict, max_tokens: int =
 
 
 async def read_board(problem: str, image_png_b64: str, line_numbers: list[int],
-                     typed: dict[int, str] | None = None, lang: str = "en") -> dict:
+                     typed: dict[int, str] | None = None, lang: str = "en",
+                     known: dict[int, dict] | None = None) -> dict:
     labels = ", ".join(str(n) for n in line_numbers) or "none"
     text = (f"Problem the student is solving: {problem or '(not given; infer it from the board)'}\n"
             f"Labeled lines on the board: {labels}{lang_note(lang)}")
     if typed:
-        known = "\n".join(f"line {n}: {t}" for n, t in sorted(typed.items()) if n in line_numbers)
-        if known:
+        typed_text = "\n".join(f"line {n}: {t}" for n, t in sorted(typed.items()) if n in line_numbers)
+        if typed_text:
             text += ("\n\nThe student typed these lines on a keyboard, so this is exactly what they say "
-                     f"(transcribe them from this text, not from the image):\n{known}")
+                     f"(transcribe them from this text, not from the image):\n{typed_text}")
+    if known:
+        known_text = "\n".join(f"line {n}: {k.get('latex') or k.get('sympy')}  [sympy: {k.get('sympy')}]"
+                               for n, k in sorted(known.items()) if n in line_numbers)
+        if known_text:
+            unread = [n for n in line_numbers if n not in known and n not in (typed or {})]
+            text += ("\n\nThese lines were already read on an earlier check and haven't changed. Use them as "
+                     "context for your verdicts and guidance, but do NOT include them in `lines`; the image "
+                     f"shows only the other lines ({', '.join(map(str, unread)) or 'none'}), so `lines` must "
+                     f"contain exactly those:\n{known_text}")
     content = [
         {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": image_png_b64}},
         {"type": "text", "text": text},

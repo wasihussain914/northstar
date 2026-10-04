@@ -209,6 +209,36 @@ function speakWithBrowser(text: string, id: number) {
   window.speechSynthesis.speak(u);
 }
 
+// Server audio already fetched, by language and text, so a phrase the GPS
+// says often ("Back on route.") starts the instant it's needed.
+const audioCache = new Map<string, Blob>();
+const AUDIO_CACHE_MAX = 48;
+
+async function fetchAudio(text: string): Promise<Blob> {
+  const key = `${locale}|${text}`;
+  const hit = audioCache.get(key);
+  if (hit) return hit;
+  const res = await fetch("/api/speak", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text, lang: locale.slice(0, 2) }),
+  });
+  if (!res.ok) {
+    if (res.status === 503) serverTts = false; // no key on the server: stop asking
+    throw new Error(String(res.status));
+  }
+  const blob = await res.blob();
+  audioCache.set(key, blob);
+  if (audioCache.size > AUDIO_CACHE_MAX) audioCache.delete(audioCache.keys().next().value!);
+  return blob;
+}
+
+/** Warm the audio for phrases we know are coming (fire and forget). */
+export function prefetchSpeech(texts: string[]) {
+  if (!serverTts) return;
+  for (const t of texts) if (t) fetchAudio(t).catch(() => {});
+}
+
 export function speak(text: string) {
   if (!text) return;
   stopSpeaking();
@@ -217,19 +247,12 @@ export function speak(text: string) {
     speakWithBrowser(text, id);
     return;
   }
-  fetch("/api/speak", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ text, lang: locale.slice(0, 2) }),
-  })
-    .then(async (res) => {
-      if (!res.ok) {
-        if (res.status === 503) serverTts = false; // no key on the server: stop asking
-        throw new Error(String(res.status));
-      }
+  fetchAudio(text)
+    .then(async (blob) => {
+      if (id !== talkId) return; // something else is being said now
       const a = getPlayer();
       if (playUrl) URL.revokeObjectURL(playUrl);
-      playUrl = URL.createObjectURL(await res.blob());
+      playUrl = URL.createObjectURL(blob);
       a.src = playUrl;
       a.onplaying = () => {
         window.clearTimeout(endTimer); // the audio's own end event takes over

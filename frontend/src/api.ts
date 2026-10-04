@@ -28,7 +28,30 @@ export interface CheckResult {
   verified: boolean;
   /** A question written on the board, answered. Null when there isn't one. */
   board_question: { line: number; question: string; answer: string } | null;
-  timing_ms: { read: number; total: number };
+  /** Each line as read, to echo back next time so unchanged lines aren't re-read. */
+  known: Record<number, KnownLine>;
+  known_problem: KnownProblem;
+  timing_ms: { read: number; total: number; model_read?: boolean; lines_read?: number };
+}
+
+/** A line the server has already read: send it back and only new lines get read. */
+export interface KnownLine {
+  latex: string;
+  sympy: string;
+  kind: string;
+  ai_verdict: string;
+}
+
+export interface KnownProblem {
+  problem_sympy: string;
+  target_variable: string;
+  task: string;
+}
+
+export interface HintPack {
+  hints: string[];
+  hint_ink: string[];
+  spoken_nudge: string;
 }
 
 /** Hostname of the FastAPI process. Unset/empty → this machine (teammate default). */
@@ -56,8 +79,23 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 
 /** `transcript`: lines the student typed (line -> exact text). */
 export function checkBoard(problem: string, image: string, lines: number[], transcript?: Record<number, string>,
-                           lang = "en", answered: number[] = []) {
-  return post<CheckResult>("/api/check", { problem, image, lines, transcript, lang, answered });
+                           lang = "en", answered: number[] = [], known: Record<number, KnownLine> = {},
+                           knownProblem: KnownProblem | null = null) {
+  return post<CheckResult>("/api/check", {
+    problem, image, lines, transcript, lang, answered, known, known_problem: knownProblem,
+  });
+}
+
+/** The hint ladder for the first wrong turn (fetched after the check, so the check never waits on it). */
+export function fetchHints(req: {
+  problem: string;
+  lines: KnownLine[];
+  line_numbers: number[];
+  first_error: number;
+  known_problem: KnownProblem | null;
+  lang: string;
+}) {
+  return post<HintPack>("/api/hints", req);
 }
 
 export function askTutor(req: {

@@ -16,13 +16,13 @@ import { ProblemScanner, type ScannedProblem } from "./ProblemScanner";
 import { RoutePanel } from "./RoutePanel";
 import { TypeBar } from "./TypeBar";
 import { UntangledMark } from "./Logo";
-import { LANGUAGES, speechLocale, type Lang } from "./i18n";
+import { LANGUAGES, PHRASES, speechLocale, type Lang } from "./i18n";
 import { Mascot, type PipMood } from "./Mascot";
 import { useTrip } from "./useTrip";
 import { useTutor } from "./useTutor";
 import { loadDataset } from "./glyphs/lib/loadDataset";
 import type { GlyphLibrary } from "./glyphs/types/handwriting";
-import { setServerTts, setSpeechLang, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
+import { prefetchSpeech, setServerTts, setSpeechLang, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
 
 const PRESETS = [
   "Solve 2(x − 3) + 4 = 10",
@@ -228,12 +228,21 @@ export default function App() {
     if (arrived && !demoRunning) fileRef.current();
   }, [arrived, tutor.result]);
 
+  const [serverVoice, setServerVoice] = useState(false);
   useEffect(() => {
     health().then((h) => {
       setHasKey(h ? h.has_key : null);
       setServerTts(!!h?.tts);
+      setServerVoice(!!h?.tts);
     });
   }, []);
+
+  // Warm the GPS's stock phrases so "Back on route" doesn't wait on a voice fetch.
+  useEffect(() => {
+    if (!serverVoice || !voiceOn) return;
+    const p = PHRASES[lang];
+    prefetchSpeech([p.arrived, p.backOnRoute, ...Array.from({ length: 8 }, (_, i) => p.recalculating(i + 1))]);
+  }, [serverVoice, voiceOn, lang]);
 
   // Dev helper: window.northstar.write(2, "2x - 6 + 4 = 10") writes a line in a handwriting font.
   const strokesRef = useRef(strokes);

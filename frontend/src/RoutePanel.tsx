@@ -66,7 +66,7 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
       {trip.durationMs != null && <TripSummary trip={trip} onNewTrip={onNewTrip} nextLabel={nextLabel ?? "New problem"} docNote={docNote} />}
       {trip.durationMs != null && practiceCard}
 
-      {errorLine != null && result && result.hints.length > 0 && (
+      {errorLine != null && result && (result.hints.length > 0 || tutor.hintsLoading) && (
         <section className="card hint-card">
           <header>
             <span className="eyebrow amber">Recalculating</span>
@@ -80,11 +80,15 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
               </li>
             ))}
           </ol>
-          {hintsShown < result.hints.length && (
+          {hintsShown < result.hints.length ? (
             <button className="btn primary" onClick={reveal}>
               {hintsShown === 0 ? "Give me a hint" : HINT_LABELS[hintsShown]}
             </button>
-          )}
+          ) : tutor.hintsLoading ? (
+            <button className="btn primary" disabled>
+              Thinking of a hint…
+            </button>
+          ) : null}
         </section>
       )}
 
