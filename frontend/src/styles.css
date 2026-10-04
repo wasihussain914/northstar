@@ -597,7 +597,7 @@ code {
 
 .board-stage {
   position: relative;
-  flex: 0 1 auto;
+  flex: 1;
   min-height: 0;
   display: flex;
 }
@@ -666,8 +666,21 @@ canvas.ink.tool-eraser {
   cursor: cell;
 }
 
+canvas.ink.tool-scroll {
+  touch-action: pan-y;
+  cursor: grab;
+}
+
+canvas.ink.tool-scroll:active {
+  cursor: grabbing;
+}
+
 .board.compact .gutter {
   width: 40px;
+}
+
+.board.compact .line-no {
+  display: none;
 }
 
 .board.compact .marker {

@@ -149,7 +149,10 @@ class HintsRequest(BaseModel):
     lang: str = Field(default="en", max_length=8)
 
 
-SKIP_KINDS = {"crossed_out", "not_math", "question"}
+# Questions are answered, not judged; reference formulas and independent
+# intermediate work are judged in context by the AI rather than compared
+# for equivalence with adjacent steps by SymPy.
+SKIP_KINDS = {"crossed_out", "not_math", "question", "formula", "intermediate"}
 
 
 def merge(board: dict, sym: dict | None) -> list[dict]:
@@ -162,7 +165,10 @@ def merge(board: dict, sym: dict | None) -> list[dict]:
         # contain solution values) stays server-side in `_detail`.
         entry = {"line": line, "latex": item["latex"], "sympy": item["sympy"], "kind": kind,
                  "status": "unclear", "source": "ai", "detail": "", "_detail": ""}
-        if kind in SKIP_KINDS:
+        if kind in {"formula", "intermediate"}:
+            # Only an actual math error is a wrong turn, never a change of context.
+            entry["status"] = "error" if item["ai_verdict"] == "error" else "skip"
+        elif kind in SKIP_KINDS:
             entry["status"] = "skip"
         elif kind == "incomplete":
             entry["status"] = "pending"
@@ -278,7 +284,8 @@ async def check(req: CheckRequest) -> dict:
             candidate["task"] = req.known_problem.task
         verdict_check = await sympy_pool.check(candidate.get("problem_sympy", ""), line_steps(candidate),
                                                candidate.get("target_variable", ""), candidate.get("task") or "")
-        if verdict_check and any(r["verdict"] != "unknown" for r in verdict_check["results"].values()):
+        if (verdict_check and verdict_check["results"]
+                and all(r["verdict"] == "valid" for r in verdict_check["results"].values())):
             board, sym = candidate, verdict_check
             # SymPy has no guidance to offer; the client keeps showing the last read's.
             board["next_step_hint"] = board["next_step_ink"] = board["on_track_message"] = ""
@@ -308,9 +315,10 @@ async def check(req: CheckRequest) -> dict:
     lines = merge(board, sym)
 
     first_error = next((l["line"] for l in lines if l["status"] == "error"), None)
-    # Hints are fetched by the client in a separate call (POST /api/hints),
-    # so the check — and the "recalculating" voice — never wait on them.
-    hints, hint_ink, spoken = [], [], ""
+    # Hints (and fix_line) are fetched by the client in a separate call
+    # (POST /api/hints), so the check — and the "recalculating" voice —
+    # never wait on them.
+    hints, hint_ink, spoken, fix_line = [], [], "", ""
 
     # A question written on the board ("what do i do?") gets answered out
     # loud, once: the client lists lines it already heard answers for.
@@ -329,20 +337,31 @@ async def check(req: CheckRequest) -> dict:
             board_question = None
 
     has_work = any(l["status"] not in ("skip", "pending") for l in lines)
+    sym_results = (sym or {}).get("results", {})
+    ai_arrived = any(
+        item.get("final_answer") is True and item.get("ai_verdict") == "ok"
+        and item["kind"] not in SKIP_KINDS and item["kind"] != "incomplete"
+        and sym_results.get(item["line"], {}).get("verdict", "unknown") == "unknown"
+        for item in board.get("lines", [])
+    )
     arrived = first_error is None and has_work and (
-        bool(sym and sym.get("arrived")) or (not board.get("target_variable") and board.get("eta_steps", 1) == 0))
+        bool(sym and sym.get("arrived")) or ai_arrived)
 
     result = {
         "lines": [{k: v for k, v in l.items() if not k.startswith("_")} for l in lines],
         "first_error": first_error,
         "hints": [h for h in hints if h][:3],
         "hint_ink": [h for h in hint_ink if h][:3],
+        "fix_line": fix_line or "",
         "spoken_nudge": spoken,
         "next_step_hint": "" if first_error or arrived else board.get("next_step_hint", ""),
         "next_step_ink": "" if first_error or arrived else board.get("next_step_ink", ""),
         "on_track_message": board.get("on_track_message", ""),
-        # -1: no fresh estimate this round (nothing was read); keep the last one.
-        "eta_steps": 0 if arrived else max(-1, int(board.get("eta_steps", 0))),
+        # -1: no fresh estimate this round (nothing was read); keep the last
+        # one. A fresh read that hasn't arrived is always at least 1 step out.
+        "eta_steps": (0 if arrived
+                      else max(1, int(board.get("eta_steps", 1))) if model_read or FAKE_VISION
+                      else -1),
         "route_note": board.get("route_note", ""),
         "arrived": arrived,
         "verified": sym is not None,
@@ -389,13 +408,15 @@ async def hints(req: HintsRequest) -> dict:
             req.problem, lines, req.first_error, flagged["_detail"], flagged["detail"], req.lang)
         hints, spoken = explained["hints"], explained["spoken_nudge"]
         hint_ink = explained.get("hint_ink", [])
+        fix_line = explained.get("fix_line", "")
     except tutor.TutorError:
         hints = [f"Take another look at line {req.first_error}. Does it really follow from the line above?",
                  flagged["detail"] or "Compare it carefully with the previous line.", ""]
         spoken = f"Recalculating. Take another look at line {req.first_error}."
         hint_ink = ["compare with above", "check each term", ""]
+        fix_line = ""
     return {"hints": [h for h in hints if h][:3], "hint_ink": [h for h in hint_ink if h][:3],
-            "spoken_nudge": spoken}
+            "fix_line": fix_line or "", "spoken_nudge": spoken}
 
 
 class ProblemRequest(BaseModel):

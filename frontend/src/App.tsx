@@ -225,6 +225,15 @@ export default function App() {
     }
   };
 
+  const handleShowFix = (line: number, fixLine: string) => {
+    countHint();
+    setTeacherInk(null);
+    if (!fixLine.trim()) return;
+    const next = writeRef.current(fixLine, line);
+    if (!next.length) return;
+    dispatch({ type: "replaceLine", line, strokes: next });
+  };
+
   // Like a GPS, surface the detail when something needs attention:
   // a wrong turn opens the drawer (hints live there), and so does arriving.
   const arrived = !!tutor.result?.arrived && tutor.phase === "ready";
@@ -265,6 +274,8 @@ export default function App() {
   // Dev helper: window.northstar.write(2, "2x - 6 + 4 = 10") writes a line in a handwriting font.
   const strokesRef = useRef(strokes);
   strokesRef.current = strokes;
+  const glyphLibraryRef = useRef(glyphLibrary);
+  glyphLibraryRef.current = glyphLibrary;
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     (window as unknown as { northstar: object }).northstar = {
@@ -292,6 +303,7 @@ export default function App() {
         dispatch({ type: e.shiftKey ? "redo" : "undo" });
       } else if (!mod && e.key === "e") setTool("eraser");
       else if (!mod && e.key === "p") setTool("pen");
+      else if (!mod && e.key === "h") setTool("scroll");
       else if (!mod && e.key === "t") {
         e.preventDefault();
         setTypeBarOpen(true);
@@ -537,6 +549,9 @@ export default function App() {
           <ToolButton active={tool === "eraser"} onClick={() => setTool("eraser")} label="Eraser (E)">
             <path d="M7.5 16h9M3.8 11.8l7-7a1.8 1.8 0 012.5 0l2.9 2.9a1.8 1.8 0 010 2.5L10 16.4H7.6l-3.8-3.8a.6.6 0 010-.8z" />
           </ToolButton>
+          <ToolButton active={tool === "scroll"} onClick={() => setTool("scroll")} label="Scroll board (H) — drag to move up or down">
+            <path d="M10 2v16M6 6l4-4 4 4M6 14l4 4 4-4" />
+          </ToolButton>
           <span className="pill-divider" />
           <ToolButton onClick={() => dispatch({ type: "undo" })} disabled={!past.length} label="Undo (⌘Z)">
             <path d="M7 5L3 9l4 4M3.5 9H12a5 5 0 010 10H9" />
@@ -713,6 +728,7 @@ export default function App() {
             trip={trip}
             lastInkLine={lastUsed || null}
             onHint={handleHint}
+            onShowFix={handleShowFix}
             onFinish={finishIt}
             finishing={finishing}
             onNewTrip={advance}

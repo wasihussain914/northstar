@@ -17,6 +17,8 @@ export interface CheckResult {
   hints: string[];
   /** ≤4-word teacher margin notes, one per hint level. */
   hint_ink: string[];
+  /** The one corrected line to write on the board for "Show me the fix". */
+  fix_line: string;
   spoken_nudge: string;
   next_step_hint: string;
   /** ≤4-word teacher margin note matching next_step_hint. */
