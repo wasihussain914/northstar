@@ -580,14 +580,27 @@ DEMO_FINISH = {
 }
 
 
+def _squash(text: str) -> str:
+    """Spelling-proof form: lowercase, no spaces/stars, exp(x) as e^x, ∫ as int."""
+    out = "".join((text or "").lower().split()).replace("*", "").replace("\\", "")
+    return (out.replace("exp(x)", "e^x").replace("∫", "int")
+            .replace("integrate(", "int").replace(",x)", "dx"))
+
+
 def canned_finish(problem: str, existing: list[dict]) -> list[str] | None:
-    key = "".join((problem or "").lower().split()).replace("*", "").replace("exp(x)", "e^x")
-    key = key.replace("integrate(", "integrate").replace(",x)", "dx")
-    steps = DEMO_FINISH.get(key)
-    if not steps:
+    import re as _re
+    if not _re.search(r"int(egrate)?x\^2e\^xdx", _squash(problem)):
         return None
-    written = {"".join(str(l.get("text", "")).lower().split()) for l in existing}
-    remaining = [s for s in steps if "".join(s.lower().split()) not in written]
+    steps = DEMO_FINISH["integratex^2e^xdx"]
+    # Skip steps already on the board, tolerating a missing trailing dx
+    # ("dv = e^x" for "dv = e^x dx") and loose spelling.
+    def forms(text: str) -> set[str]:
+        s = _squash(text)
+        return {s, s[:-2] if s.endswith("dx") else s}
+    written: set[str] = set()
+    for l in existing:
+        written |= forms(str(l.get("text", "")))
+    remaining = [s for s in steps if not (forms(s) & written)]
     return remaining or None
 
 

@@ -37,3 +37,16 @@ def test_unfinishable_problem_is_a_502(monkeypatch):
     with pytest.raises(Exception) as err:
         run_finish(monkeypatch, "Prove the pigeonhole principle", [])
     assert getattr(err.value, "status_code", None) == 502
+
+
+def test_demo_integral_gets_the_canned_solution_in_any_spelling():
+    from main import canned_finish, DEMO_FINISH
+    full = DEMO_FINISH["integratex^2e^xdx"]
+    for spelling in ("Integrate x^2 e^x dx", "integrate(x^2*exp(x), x)",
+                     "∫ x^2 e^x dx", "Integrate x^2e^x dx"):
+        assert canned_finish(spelling, []) == full, spelling
+    # Lines already written are skipped — even sloppy ones missing the dx.
+    done = [{"text": "u = x^2"}, {"text": "dv = e^x"}]
+    rest = canned_finish("Integrate x^2 e^x dx", done)
+    assert rest is not None and "u = x^2" not in rest and "dv = e^x dx" not in rest
+    assert canned_finish("Integrate x e^x dx", []) is None
