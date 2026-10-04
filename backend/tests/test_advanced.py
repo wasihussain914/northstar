@@ -306,3 +306,14 @@ def test_int_word_notation_parses_and_wrong_rewrites_flag():
     bad, _ = line_verdicts("integrate(x^2*exp(x), x)",
                            ["int x^2 e^x dx = x^2 e^x - int x e^x dx"])
     assert bad == {1: "invalid"}
+
+
+def test_bookkeeping_jots_are_not_wrong_turns():
+    # "2x" under integrate(x^2 e^x) is du working, not a bad answer.
+    out, _ = line_verdicts("integrate(x^2*exp(x), x)", ["2x"])
+    assert out == {1: "unknown"}
+    out, _ = line_verdicts("integrate(x^2*exp(x), x)", ["e^x"])
+    assert out == {1: "unknown"}
+    # A genuinely wrong antiderivative still flags.
+    bad, _ = line_verdicts("integrate(x^2, x)", ["x^3/2"])
+    assert bad == {1: "invalid"}

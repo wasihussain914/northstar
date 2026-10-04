@@ -358,6 +358,20 @@ def check_integrate(problem: str, steps, target: str | None) -> dict | None:
             return _Judged(StepCheck("valid"), cur, False)
         if prev is not None and _expr_value(prev) is not None and exprs_equal(val, _expr_value(prev)) is True:
             return _Judged(StepCheck("valid"), cur, False)
+        # By-parts bookkeeping jots: a factor of the integrand ("e^x") or a
+        # factor's derivative ("2x" under x^2 e^x) is working, not an answer
+        # attempt — leave it unjudged rather than flag it.
+        if integrand is not None:
+            factors = list(integrand.args) if integrand.is_Mul else [integrand]
+            jots: list[sp.Expr] = []
+            for f in factors:
+                jots.append(f)
+                try:
+                    jots.append(sp.diff(f, var))
+                except Exception:
+                    pass
+            if any(exprs_equal(val, j) is True for j in jots):
+                return _Judged(StepCheck("unknown"), cur)
         note = ("This isn't the value of that integral." if definite
                 else "Differentiating this doesn't give back the integrand.")
         return _Judged(StepCheck("invalid", "integral step does not match", note), cur)
