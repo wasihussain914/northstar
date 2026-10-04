@@ -2,7 +2,7 @@ import { layoutText } from "../glyphs/lib/renderText";
 import { transformPoint } from "../glyphs/lib/inkMask";
 import { makePrng } from "../glyphs/lib/rng";
 import type { GlyphLibrary, NormalizedGlyph } from "../glyphs/types/handwriting";
-import { LINE_H, makeStroke, strokePath, type Point, type Stroke } from "./geometry";
+import { LINE_H, MIN_BOARD_W, makeStroke, strokePath, type Point, type Stroke } from "./geometry";
 import { rememberText, textToStrokes } from "./handwriting";
 
 /** Ink height of a written line, in board units. */
@@ -177,7 +177,15 @@ export function glyphStrokes(text: string, line: number, library: GlyphLibrary, 
   const top = (line - 1) * LINE_H;
   const baseline = top + LINE_H * 0.74;
   const shown = displayMath(text);
-  const out = inkFor(shown, library, x0, baseline, FONT_H, seedOf(shown, line), line);
+  // Long lines shrink to stay on the page (the narrowest board is the cap,
+  // so written work never runs off the right edge on any screen).
+  const limit = MIN_BOARD_W - x0 - 16;
+  let fontH = FONT_H;
+  const measured = layoutText(shown, library, x0, baseline, { fontHeight: fontH, seed: seedOf(shown, line) });
+  if (measured.totalWidth > limit) {
+    fontH = Math.max(17, Math.floor(fontH * (limit / measured.totalWidth)));
+  }
+  const out = inkFor(shown, library, x0, baseline, fontH, seedOf(shown, line), line);
   // The tag keeps the original dialect, so the server reads the line verbatim.
   if (remember && out.length) rememberText(out, text);
   return out;

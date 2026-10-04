@@ -573,7 +573,7 @@ DEMO_FINISH = {
         "du = 2x dx",
         "dv = e^x dx",
         "v = e^x",
-        "int x^2 e^x dx = x^2 e^x - int 2x e^x dx",
+        "x^2 e^x - int 2x e^x dx",
         "x^2 e^x - 2(x e^x - e^x) + C",
         "x^2 e^x - 2x e^x + 2 e^x + C",
     ],
