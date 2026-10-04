@@ -178,6 +178,8 @@ number_theory, prove, pigeonhole, balance, physics, other.
 Dialect for sympy and problem_sympy. Use * for multiplication (2*x). Single-letter variables only, plus C1, C2, ...
 - Algebra and trig: + - * / ^ ( ) = < > <= >=, and sqrt, abs, log, ln, exp, factorial, binomial, sin, cos, tan, \
 asin, acos, atan, sec, csc, cot, sinh, cosh, tanh, pi.
+- Several solutions on one line — side by side ("x = 0   x = 5"), or joined by commas, "or", "and", "y" or \
+another word in the student's language — are a SOLUTION LIST, never a product: sympy is "x = 0 or x = 5".
 - Calculus: diff(f, x), diff(f, x, 2), diff(f, x, y), integrate(f, x), integrate(f, x, a, b), limit(f, x, a), \
 limleft(f, x, a), limright(f, x, a), grad(f, x, y).
 - Sums: summation(term, k, 1, n).
