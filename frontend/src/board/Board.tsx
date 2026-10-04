@@ -281,7 +281,19 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
     if (!teacherInk || !glyphLibrary) return;
 
     // Lowercase the phrase — only lowercase glyphs are in the dataset
-    const phrase = teacherInk.phrase.toLowerCase();
+    // Only characters the handwriting dataset can draw: lowercase it,
+    // straighten quotes, spell what we can, and drop the rest — a missing
+    // glyph would render as a tofu box on the page.
+    const phrase = [...teacherInk.phrase.toLowerCase()
+      .replace(/['’‘`]/g, "")
+      .replace(/[?!;]/g, "")
+      .replace(/"/g, "")
+      .replace(/\*/g, "")]
+      .filter((ch) => ch === " " || glyphLibrary.byLabel.has(ch))
+      .join("")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (!phrase) return;
     const seed = teacherInk.line * 997 + (phrase.charCodeAt(0) || 0);
 
     // Find the rightmost x of student ink on the target line
