@@ -27,7 +27,7 @@ export interface CheckResult {
   arrived: boolean;
   verified: boolean;
   /** A question written on the board, answered. Null when there isn't one. */
-  board_question: { line: number; question: string; answer: string } | null;
+  board_question: { line: number; question: string; answer: string; ink?: string } | null;
   timing_ms: { read: number; total: number };
 }
 

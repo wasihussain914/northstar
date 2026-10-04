@@ -199,6 +199,20 @@ export default function App() {
     });
   }, [strokes, tutor.lineKeys]);
 
+  // The tutor writes back: a red margin note beside a question inked on the board.
+  const inkedQuestion = useRef("");
+  useEffect(() => {
+    const q = tutor.result?.board_question;
+    if (!q?.ink) return;
+    const sig = tutor.lineKeys.get(q.line) ?? "";
+    if (!sig) return; // scratchpad questions have no line on the paper
+    const key = `${q.line}|${sig}`;
+    if (inkedQuestion.current === key) return;
+    inkedQuestion.current = key;
+    inkAnchor.current = sig;
+    setTeacherInk({ phrase: q.ink, line: q.line });
+  }, [tutor.result, tutor.lineKeys]);
+
   const handleHint = (inkPhrase?: string, inkLine?: number) => {
     countHint();
     if (inkPhrase && inkLine != null) {
