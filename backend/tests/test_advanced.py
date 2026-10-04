@@ -317,3 +317,13 @@ def test_bookkeeping_jots_are_not_wrong_turns():
     # A genuinely wrong antiderivative still flags.
     bad, _ = line_verdicts("integrate(x^2, x)", ["x^3/2"])
     assert bad == {1: "invalid"}
+
+
+def test_dv_without_v_on_the_board_is_a_valid_choice():
+    out, _ = line_verdicts("integrate(x^2*exp(x), x)",
+                           ["u = x^2", "du = 2x dx", "dv = e^x dx"])
+    assert out == {1: "valid", 2: "valid", 3: "valid"}
+    # Once v exists, the differential is held to it.
+    bad, _ = line_verdicts("integrate(x^2*exp(x), x)",
+                           ["v = e^x", "dv = x e^x dx"])
+    assert bad[2] == "invalid"

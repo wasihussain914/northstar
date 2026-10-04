@@ -305,8 +305,12 @@ def check_integrate(problem: str, steps, target: str | None) -> dict | None:
             name, body = sub
             base = defs.get(name)
             val = _expr_value(parse_statement(body))
-            if base is None or val is None:
+            if val is None:
                 return _Judged(StepCheck("unknown"))
+            if base is None:
+                # No "v = ..." on the board (yet): writing "dv = e^x dx" IS
+                # the choice of parts — true by definition, like "u = x^2".
+                return _Judged(StepCheck("valid"))
             want = sp.diff(base, var)
             if exprs_equal(want, val) is True:
                 return _Judged(StepCheck("valid"))
