@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 export interface TryVerdict {
-  phase: "checking" | "ok" | "error";
+  phase: "checking" | "ok" | "error" | "answered";
   message: string;
 }
 
@@ -50,7 +50,7 @@ export function TypeBar({ line, verdict, onTry }: Props) {
       </form>
       {verdict && verdict.phase !== "checking" && (
         <p className={`try-verdict try-${verdict.phase}`} role="status">
-          {verdict.phase === "ok" ? "✓ " : "✗ "}
+          {verdict.phase === "ok" ? "✓ " : verdict.phase === "answered" ? "💬 " : "✗ "}
           {verdict.message}
         </p>
       )}

@@ -353,6 +353,12 @@ export default function App() {
       const tried = [...(snap?.lines ?? []), typeTarget];
       const transcript = { ...(typedTranscript(strokes) ?? {}), [typeTarget]: text };
       const res = await checkBoard(problem, image, tried, transcript, lang);
+      // A question typed here ("how do i fix it?") gets answered, out loud.
+      if (res.board_question && res.board_question.line === typeTarget) {
+        setTryVerdict({ phase: "answered", message: res.board_question.answer });
+        if (voiceOn) speak(res.board_question.answer);
+        return;
+      }
       const line = res.lines.find((l) => l.line === typeTarget);
       if (line?.status === "ok") {
         setTryVerdict({

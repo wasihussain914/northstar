@@ -2942,3 +2942,7 @@ canvas.ink.tool-eraser {
 .try-error {
   color: var(--amber-text);
 }
+
+.try-answered {
+  color: var(--cobalt-text);
+}
