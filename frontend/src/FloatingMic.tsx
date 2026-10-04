@@ -75,29 +75,38 @@ export function FloatingMic({ problem, strokes, result, voiceOn, lang }: Props) 
     }
   };
 
+  const finishRecording = async () => {
+    const rec = recorder.current;
+    if (!rec) return;
+    recorder.current = null;
+    setState("thinking");
+    try {
+      const text = await rec.stop();
+      if (text) await ask(text);
+      else {
+        setState("idle");
+        caption("I didn't catch that — tap and try again?");
+      }
+    } catch {
+      setState("idle");
+      caption("I couldn't hear that — try again?");
+    }
+  };
+
   const toggle = async () => {
     if (state === "thinking") return;
     // Server transcription first: record here, transcribe there. iPad
-    // Safari's own SpeechRecognition can hang the page.
+    // Safari's own SpeechRecognition can hang the page. Pausing finishes
+    // the recording; a second tap is the backup.
     if (serverStt()) {
       if (state === "listening") {
-        setState("thinking");
-        try {
-          const text = (await recorder.current?.stop()) ?? "";
-          recorder.current = null;
-          if (text) await ask(text);
-          else setState("idle");
-        } catch {
-          recorder.current = null;
-          setState("idle");
-          caption("I couldn't hear that — try again?");
-        }
+        await finishRecording();
         return;
       }
       stopSpeaking();
       try {
         const rec = new Recorder();
-        await rec.start();
+        await rec.start(() => void finishRecording());
         recorder.current = rec;
         setState("listening");
       } catch {

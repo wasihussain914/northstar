@@ -64,28 +64,35 @@ export function PlanCard({ problem, lang, voiceOn, onClose }: Props) {
     }
   };
 
+  const finishRecording = async () => {
+    const rec = recorder.current;
+    if (!rec) return;
+    recorder.current = null;
+    setListening(false);
+    try {
+      const text = await rec.stop();
+      if (text) {
+        setDraft(text);
+        void submit(text);
+      }
+    } catch {
+      /* transcription failed: type instead */
+    }
+  };
+
   const toggleMic = async () => {
     // Server transcription first: record here, transcribe there. iPad
-    // Safari's own SpeechRecognition can hang the page.
+    // Safari's own SpeechRecognition can hang the page. Pausing finishes
+    // the recording; a second tap is the backup.
     if (serverStt()) {
       if (listening) {
-        setListening(false);
-        try {
-          const text = (await recorder.current?.stop()) ?? "";
-          recorder.current = null;
-          if (text) {
-            setDraft(text);
-            void submit(text);
-          }
-        } catch {
-          recorder.current = null;
-        }
+        await finishRecording();
         return;
       }
       stopSpeaking();
       try {
         const rec = new Recorder();
-        await rec.start();
+        await rec.start(() => void finishRecording());
         recorder.current = rec;
         setListening(true);
       } catch {

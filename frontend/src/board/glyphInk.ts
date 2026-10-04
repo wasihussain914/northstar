@@ -39,7 +39,7 @@ const SMALL: Record<string, { h: number; mid: number }> = {
   "'": { h: 0.25, mid: 0.85 },
   // Tall, not small: an integral sign spans the whole line and dips below
   // the baseline, like the real thing — never an x-height "s".
-  "∫": { h: 1.45, mid: 0.38 },
+  "∫": { h: 1.25, mid: 0.4 },
 };
 
 /** A stable seed per line so the same text always lays out the same way. */
@@ -170,7 +170,9 @@ export function displayMath(text: string): string {
     .replace(/<=/g, "≤")
     .replace(/>=/g, "≥")
     .replace(/!=/g, "≠")
-    .replace(/∫\s+/g, "∫");
+    // Air around the tall ∫ so it never crashes into its neighbours.
+    .replace(/\s*∫\s*/g, " ∫ ")
+    .replace(/^\s+/, "");
 }
 
 export function glyphStrokes(text: string, line: number, library: GlyphLibrary, x0 = 28, remember = true): Stroke[] {

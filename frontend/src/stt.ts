@@ -35,13 +35,18 @@ function blobToB64(blob: Blob): Promise<string> {
   });
 }
 
-/** One tap-to-talk session: start() to record, stop() to get the transcript. */
+/** One tap-to-talk session: start() to record, stop() to get the transcript.
+ * Hands-free: once speech is heard, ~1.6s of silence (or 30s total) calls
+ * onDone, so a tap to finish is the backup, not the requirement. */
 export class Recorder {
   private media: MediaStream | null = null;
   private rec: MediaRecorder | null = null;
   private chunks: Blob[] = [];
+  private ctx: AudioContext | null = null;
+  private watch: number | undefined;
+  private capTimer: number | undefined;
 
-  async start(): Promise<void> {
+  async start(onDone?: () => void): Promise<void> {
     this.media = await navigator.mediaDevices.getUserMedia({ audio: true });
     const mime = pickMime();
     this.rec = mime ? new MediaRecorder(this.media, { mimeType: mime }) : new MediaRecorder(this.media);
@@ -50,6 +55,43 @@ export class Recorder {
       if (e.data.size) this.chunks.push(e.data);
     };
     this.rec.start();
+    if (onDone) this.autoStop(onDone);
+  }
+
+  private autoStop(onDone: () => void) {
+    let fired = false;
+    const done = () => {
+      if (fired) return;
+      fired = true;
+      onDone();
+    };
+    this.capTimer = window.setTimeout(done, 30000);
+    try {
+      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctx || !this.media) return;
+      this.ctx = new Ctx();
+      const analyser = this.ctx.createAnalyser();
+      analyser.fftSize = 512;
+      this.ctx.createMediaStreamSource(this.media).connect(analyser);
+      const buf = new Float32Array(analyser.fftSize);
+      let spoke = false;
+      let quietMs = 0;
+      this.watch = window.setInterval(() => {
+        analyser.getFloatTimeDomainData(buf);
+        let sum = 0;
+        for (const v of buf) sum += v * v;
+        const rms = Math.sqrt(sum / buf.length);
+        if (rms > 0.02) {
+          spoke = true;
+          quietMs = 0;
+        } else if (spoke) {
+          quietMs += 120;
+          if (quietMs >= 1600) done();
+        }
+      }, 120);
+    } catch {
+      /* no analyser: the 30s cap and tap-to-finish still work */
+    }
   }
 
   /** Stop recording, release the mic, transcribe on the server. */
@@ -90,6 +132,10 @@ export class Recorder {
   }
 
   private release() {
+    window.clearInterval(this.watch);
+    window.clearTimeout(this.capTimer);
+    this.ctx?.close().catch(() => {});
+    this.ctx = null;
     this.media?.getTracks().forEach((t) => t.stop());
     this.media = null;
   }
