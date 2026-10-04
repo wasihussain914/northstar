@@ -1,101 +1,187 @@
 <img width="2172" height="724" alt="EED5AB45-0FA7-475D-87C9-C79B46261CC8" src="https://github.com/user-attachments/assets/257002b2-9887-40da-baff-aae21b1c7586" />
 
-**A personalized AI tutor that works alongside you as you solve math.** Untangled watches your whiteboard, catches mistakes as they happen, annotates the step that went off track, and guides you toward understanding instead of jumping straight to the answer.
+### A GPS for solving math. You do the driving.
 
-Built for Cornell Hacks 2026 around the theme of **Navigation**.
+Untangled is a personalized AI tutor that navigates your reasoning as you solve.
 
-## About
+Work naturally on a digital whiteboard. Untangled follows your work line by line, verifies your reasoning in the background, and stays quiet while you're on track. The moment you take a wrong turn, it marks the exact step, says **"Recalculating,"** and gives you progressively stronger hints to help you find your own way back.
 
-Most AI study tools make learning a back-and-forth chat: ask a question, get a response, and repeat. Others reveal a complete solution all at once. Untangled takes a more hands-on approach. It follows your work on a digital whiteboard and acts like a teacher beside you, offering timely feedback while you remain in control of solving the problem.
+It doesn't hand you the destination. It gives you turn-by-turn guidance.
 
-## Inspiration
+**Built for Cornell Hacks 2026 — Theme: Navigation.**
 
-We wanted an AI tutor that could interact with a student's actual problem-solving process. A teacher does more than give the answer: they notice where a student took a wrong turn, point to the relevant line, and offer just enough guidance to help the student continue. We set out to bring that experience to a whiteboard app, with a friendly mascot that encourages students and is ready to answer questions.
+---
 
-## What it does
+## The Problem
 
-- **Follows your work in real time.** Write with a mouse, finger, or stylus. Untangled checks a newly completed line quickly and checks again after a pause, so feedback can arrive while you are still working.
-- **Marks the first wrong turn.** The route panel points to the line where reasoning first went off track; later lines that carry the same mistake forward are not repeatedly flagged.
-- **Guides instead of giving away the solution.** Ask for a hint to get a ladder of guidance, from a nudge to a more direct explanation. Ask Untangled a question by typing or using the microphone; its response uses the current board context and stays concise.
-- **Checks math with symbolic tools.** SymPy verifies supported steps when it can. When a step cannot be decided symbolically, the app can use an AI judgment and label it accordingly.
-- **Scans homework.** Import a photo or PDF, select a problem, and use it as the destination for your work. A worksheet can be turned into a sequence of problems.
-- **Speaks feedback aloud.** The GPS-inspired voice stays quiet while you work, then calls out a missed turn or lets you know when you are back on route. Browser speech synthesis works by default; an optional ElevenLabs key enables a neural voice.
-- **Supports different ways of working.** Type a step, use the demo to present an example, review a trip summary, or choose from six interface and guidance languages.
+You make a mistake on **line 2**.
 
-## How we built it
+You realize it on **line 12**.
 
-Untangled separates reading the board from checking the mathematics:
+The expensive part isn't the mistake — it's everything you do before realizing where you went wrong.
 
-1. The React whiteboard groups strokes into lines and sends a labeled snapshot when a line is completed or the student pauses.
-2. A vision-capable language model reads the handwriting and returns structured math representations for each line.
-3. The FastAPI backend passes supported steps to SymPy, which checks equivalence and common errors such as lost solutions or a reversed inequality. Symbolic checks run in worker processes with a time limit.
-4. The backend combines the reading and check results. When a line needs help, a separate model request creates graduated hints and a short spoken nudge.
-5. The frontend places status markers beside the relevant lines, updates the route panel, and applies a voice policy so feedback is timely without interrupting every step.
+Most AI study tools don't solve this problem. They turn learning into a back-and-forth chat:
 
-The frontend is built with **React 19, TypeScript, and Vite**, with `perfect-freehand` for ink geometry, KaTeX for math rendering, and PDF.js for PDF import. The backend uses **Python 3.11+, FastAPI, Pydantic, and SymPy**. Claude is the default language-model provider; Gemini and Grok are also supported. Provider keys stay in the backend. See `backend/.env.example` for configuration.
+**take a photo → upload → wait → get an answer → repeat**
 
-For stylus users, the canvas reads pen pressure and filters broad touch contacts to reduce palm marks. The project also includes a separate handwriting-model training effort: we built a companion application and collected thousands of handwritten characters. The live app's board-reading flow currently sends board snapshots to a vision model; the handwriting-model training work is a distinct part of the project.
+Or they simply generate the entire solution.
 
-## Challenges we ran into
+But when you're actually solving a problem, what you need isn't someone to hand you the destination. You need to know **when you took a wrong turn.**
 
-- **Creating handwriting training data.** We needed a practical way to collect varied examples, so we made a separate application and handwrote thousands of characters for model training.
-- **Making a whiteboard feel natural.** Drawing, erasing, undoing, typed work, stylus pressure, palm rejection, and smaller screens all needed to work together without getting in the student's way.
-- **Keeping feedback fast.** Full-board checks can be expensive and slow, so we designed checkpoints around line completion and pauses, and kept hint generation separate from the initial check.
-- **Reducing hallucinations.** A language model can misread handwriting or make a confident math mistake. We use structured transcription and rely on SymPy for symbolic verification where possible, while making AI-only judgments visible as such.
-- **Coordinating a broad product.** The project brought together model work, backend orchestration, a drawing interface, speech, and a coherent tutoring experience under hackathon time constraints.
+That's what Untangled is built for.
 
-## Accomplishments we are proud of
+---
 
-- Built an interactive tutor that responds to a student's working, not just a prompt typed into chat.
-- Designed feedback around the first incorrect step and a progressive hint ladder that preserves the student's role in solving.
-- Combined vision-model handwriting transcription with symbolic math checking and clear labeling when verification is uncertain.
-- Delivered a complete whiteboard workflow with homework scanning, voice feedback, typed steps, language options, and tablet-friendly palm handling.
-- Created a companion workflow and a large handwritten character set for training a handwriting model.
+## The Idea: Turn-by-Turn for Your Thinking
 
-## What we learned
+A GPS doesn't drive the car for you.
 
-We learned how much work sits between a model demo and a useful learning tool. Training a model requires thoughtful data collection; real-time tutoring requires balancing latency with careful checking; and whiteboard UI/UX depends on small interaction details such as palm detection, line grouping, and how feedback appears. We also learned to divide responsibilities between an LLM that can interpret messy input and deterministic tools that can verify math, and to coordinate that work across a team.
+It watches your route, stays quiet while you're going the right way, and speaks up when you miss a turn.
 
-## What's next
+**Untangled does the same thing for math.**
 
-We want to expand Untangled to more advanced mathematics, including multivariable calculus, partial differential equations, linear algebra, and proofs. We also see a path into physics and chemistry, where students could receive the same step-by-step guidance while working through problems in those subjects.
+You solve the problem yourself. Untangled follows along in the background.
 
-## Run it yourself
+When your reasoning is valid:
 
-You will need **Python 3.11+**, [uv](https://docs.astral.sh/uv/), and **Node.js 20+**. You also need an API key for a supported language-model provider. Claude is the default; Gemini and Grok are optional providers.
+> ✓ On route.
 
-1. Create `backend/.env` from `backend/.env.example` and add a provider key, such as `ANTHROPIC_API_KEY`. To use Gemini or Grok instead, add the matching key and set `NORTHSTAR_PROVIDER` as documented in the example file.
-2. Create `frontend/.env` from `frontend/.env.example`. Leave `VITE_BACKEND_IP` unset for local development.
-3. In one terminal, start the API:
+When a step breaks:
 
-   ```bash
-   cd backend
-   uv sync
-   uv run uvicorn main:app --host 127.0.0.1 --port 8000 --reload
-   ```
+> 📍 Wrong turn — Line 3  
+> 🔊 "Recalculating."
 
-4. In another terminal, start the frontend:
+And once you've corrected it:
 
-   ```bash
-   cd frontend
-   npm ci
-   npm run dev
-   ```
+> ✓ Back on route.
 
-5. Open the local URL printed by Vite, usually **http://localhost:5173**.
+The goal isn't to get you to the answer as quickly as possible.
 
-To use a phone or tablet on the same Wi-Fi, see [IPAD.md](IPAD.md) for LAN setup and device notes. The microphone feature may require HTTPS on iOS. Never commit API keys.
+The goal is to help you understand **how to get there yourself.**
 
-## Project layout
+---
 
-| Path | Purpose |
-| --- | --- |
-| `frontend/src/board/` | Whiteboard drawing, stroke geometry, and palm handling |
-| `frontend/src/useTutor.ts` | Checkpoint timing, API requests, and voice behavior |
-| `frontend/src/RoutePanel.tsx` | Route status and hint display |
-| `backend/main.py` | FastAPI routes and orchestration |
-| `backend/tutor.py` | Language-model provider calls for reading and tutoring |
-| `backend/verify.py` | SymPy-based math verification |
-| `backend/tts.py` | Optional ElevenLabs speech synthesis |
+## What Untangled Does
 
-For tests and additional development notes, see the repository's `AGENTS.md` and backend test suite.
+### ✍️ Follows your work as you write
+
+Solve naturally with a stylus, mouse, touch, or keyboard.
+
+Untangled groups your writing into lines and creates checkpoints as you work. Starting a new line triggers a check of the line you just completed, while a short pause checks the current board.
+
+That means feedback arrives **during the solving process**, not after you've already finished.
+
+### 📍 Finds the first wrong turn
+
+Untangled doesn't mark every line downstream of a mistake as wrong.
+
+It identifies the moment your reasoning first went off route.
+
+If line 3 contains the actual mistake and lines 4–6 correctly continue from that mistaken assumption, **line 3 is the wrong turn.**
+
+That's the line Untangled points you back to.
+
+### 🧭 Guides instead of solving
+
+Untangled doesn't immediately reveal the answer.
+
+Hints form a ladder:
+
+1. **Nudge** — points you toward where to look
+2. **Direction** — reminds you of the relevant rule or idea
+3. **Correction** — shows how that specific step should change
+
+You climb only as far as you need.
+
+The final destination is still yours to reach.
+
+### 🔊 Speaks like a GPS
+
+Untangled intentionally stays quiet while you're solving correctly.
+
+When you miss a turn, it can speak:
+
+> "Recalculating."
+
+Fix your reasoning:
+
+> "Back on route."
+
+Finish the problem:
+
+> "You have arrived."
+
+The voice isn't constant narration. It follows a **navigation policy** designed to intervene only when useful.
+
+### 💬 Ask Untangled
+
+Need clarification?
+
+Ask by microphone or keyboard:
+
+> "Why is line 2 wrong?"
+
+Untangled sees your current whiteboard and the most recent verification result, so its response is grounded in what you're actually doing.
+
+Responses stay concise and avoid giving away the final answer.
+
+### 📷 Turn homework into a route
+
+Import a photo or PDF of your homework and drag a box around the problem you want to solve.
+
+Untangled reads it and turns it into your **destination**.
+
+Scan an entire worksheet and each problem can become another stop on the trip.
+
+### 🌎 Navigate in your language
+
+Guidance is available in six interface/guidance languages:
+
+- English
+- Español
+- Français
+- 中文
+- हिन्दी
+- বাংলা
+
+Hints, spoken feedback, encouragement, and Ask Untangled responses change language while the underlying mathematics stays the same.
+
+---
+
+## How It Works
+
+Untangled deliberately separates **reading the math** from **checking the math**.
+
+```text
+your handwriting
+      │
+      ▼
+┌──────────────────┐
+│  Vision Model    │
+│                  │
+│ ink → structured │
+│ math expression  │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│      SymPy       │
+│                  │
+│ verify reasoning │
+│ between steps    │
+└────────┬─────────┘
+         │
+    wrong turn?
+         │
+         ▼
+┌──────────────────┐
+│   AI Tutor       │
+│                  │
+│ generate a hint  │
+│ for that step    │
+└────────┬─────────┘
+         │
+         ▼
+   📍 exact line
+   🔊 GPS feedback
+   💡 hint ladder
