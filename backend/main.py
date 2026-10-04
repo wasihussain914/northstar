@@ -115,7 +115,9 @@ class CheckRequest(BaseModel):
     lang: str = Field(default="en", max_length=8)
 
 
-SKIP_KINDS = {"crossed_out", "not_math"}
+# Reference and independent intermediate work are judged in context by the AI,
+# rather than compared for equivalence with adjacent steps by SymPy.
+SKIP_KINDS = {"crossed_out", "not_math", "formula", "intermediate"}
 
 
 def merge(board: dict, sym: dict | None) -> list[dict]:
@@ -128,7 +130,10 @@ def merge(board: dict, sym: dict | None) -> list[dict]:
         # contain solution values) stays server-side in `_detail`.
         entry = {"line": line, "latex": item["latex"], "sympy": item["sympy"], "kind": kind,
                  "status": "unclear", "source": "ai", "detail": "", "_detail": ""}
-        if kind in SKIP_KINDS:
+        if kind in {"formula", "intermediate"}:
+            # Only an actual math error is a wrong turn, never a change of context.
+            entry["status"] = "error" if item["ai_verdict"] == "error" else "skip"
+        elif kind in SKIP_KINDS:
             entry["status"] = "skip"
         elif kind == "incomplete":
             entry["status"] = "pending"
@@ -183,14 +188,14 @@ async def check(req: CheckRequest) -> dict:
     started = time.perf_counter()
     board = sym = None
 
-    # Fast path: every line was typed, so the text is exact and a model read
-    # adds nothing. SymPy alone turns a check into milliseconds; if it can't
-    # decide a single line, fall through to the full model read below.
+    # Exact typed text can skip the model only when every line is valid.
+    # Other verdicts need context: an apparent mismatch may be independent work.
     if not FAKE_VISION and req.transcript and req.lines and all(n in req.transcript for n in req.lines):
         candidate = fake_tutor.transcript_board(req.problem, req.transcript, req.lines)
         verdict_check = await sympy_pool.check(candidate.get("problem_sympy", ""), line_steps(candidate),
                                                candidate.get("target_variable", ""), candidate.get("task") or "")
-        if verdict_check and any(r["verdict"] != "unknown" for r in verdict_check["results"].values()):
+        if (verdict_check and verdict_check["results"]
+                and all(r["verdict"] == "valid" for r in verdict_check["results"].values())):
             board, sym = candidate, verdict_check
 
     if board is None:
@@ -227,8 +232,15 @@ async def check(req: CheckRequest) -> dict:
             fix_line = ""
 
     has_work = any(l["status"] not in ("skip", "pending") for l in lines)
+    sym_results = (sym or {}).get("results", {})
+    ai_arrived = any(
+        item.get("final_answer") is True and item.get("ai_verdict") == "ok"
+        and item["kind"] not in SKIP_KINDS and item["kind"] != "incomplete"
+        and sym_results.get(item["line"], {}).get("verdict", "unknown") == "unknown"
+        for item in board.get("lines", [])
+    )
     arrived = first_error is None and has_work and (
-        bool(sym and sym.get("arrived")) or (not board.get("target_variable") and board.get("eta_steps", 1) == 0))
+        bool(sym and sym.get("arrived")) or ai_arrived)
 
     result = {
         "lines": [{k: v for k, v in l.items() if not k.startswith("_")} for l in lines],
@@ -240,7 +252,7 @@ async def check(req: CheckRequest) -> dict:
         "next_step_hint": "" if first_error or arrived else board.get("next_step_hint", ""),
         "next_step_ink": "" if first_error or arrived else board.get("next_step_ink", ""),
         "on_track_message": board.get("on_track_message", ""),
-        "eta_steps": 0 if arrived else max(0, int(board.get("eta_steps", 0))),
+        "eta_steps": 0 if arrived else max(1, int(board.get("eta_steps", 1))),
         "route_note": board.get("route_note", ""),
         "arrived": arrived,
         "verified": sym is not None,

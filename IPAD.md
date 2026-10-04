@@ -126,6 +126,7 @@ Tailscale is the private version of the same idea: install it on the PC and the 
 
 ## On the iPad, once the page is open
 
+- To reach lower lines, select the **Scroll board** tool (up/down arrows) and swipe the paper. Select **Pen** to keep writing. On a computer, the mouse wheel or trackpad also scrolls the board; press `H` to drag it and `P` to return to the pen.
 - Apple Pencil uses real pressure. The canvas keeps the pen pointer and drops the palm. A wide touch is ignored, and if your palm lands first that mark is discarded when the pencil touches. After the pencil has been used, fingers stay ignored.
 - The type bar at the bottom adds a step as exact text (no handwriting to misread). Pick a line in the route list to replace it.
 - **▶ Demo** plays a scripted solve if the pencil or the network misbehaves. Touching the board stops it.

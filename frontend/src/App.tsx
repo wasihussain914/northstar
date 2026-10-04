@@ -108,19 +108,6 @@ export default function App() {
       .catch(() => { /* backend not running yet or no samples — silent */ });
   }, []);
 
-  const handleGlyphFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const json = JSON.parse(ev.target?.result as string);
-        setGlyphLibrary(loadDataset(json));
-      } catch { /* ignore bad files */ }
-    };
-    reader.readAsText(file);
-  };
-
   const tutor = useTutor(strokes, problem, voiceOn, lang);
   const { trip, countHint } = useTrip(strokes, tutor);
 
@@ -216,6 +203,7 @@ export default function App() {
         dispatch({ type: e.shiftKey ? "redo" : "undo" });
       } else if (!mod && e.key === "e") setTool("eraser");
       else if (!mod && e.key === "p") setTool("pen");
+      else if (!mod && e.key === "h") setTool("scroll");
       else if (!mod && e.key === "t") {
         e.preventDefault();
         document.getElementById("type-step")?.focus();
@@ -449,6 +437,9 @@ export default function App() {
               </ToolButton>
               <ToolButton active={tool === "eraser"} onClick={() => setTool("eraser")} label="Eraser (E)">
                 <path d="M7.5 16h9M3.8 11.8l7-7a1.8 1.8 0 012.5 0l2.9 2.9a1.8 1.8 0 010 2.5L10 16.4H7.6l-3.8-3.8a.6.6 0 010-.8z" />
+              </ToolButton>
+              <ToolButton active={tool === "scroll"} onClick={() => setTool("scroll")} label="Scroll board (H) - drag to move up or down">
+                <path d="M10 2v16M6 6l4-4 4 4M6 14l4 4 4-4" />
               </ToolButton>
               <span className="float-divider" />
               <ToolButton onClick={() => dispatch({ type: "undo" })} disabled={!past.length} label="Undo (⌘Z)">

@@ -150,10 +150,32 @@ If a line is ambiguous, pick the most likely reading.
 - latex: the line as LaTeX (no surrounding $).
 - sympy: the line in the dialect below. Leave it empty if the line is prose, crossed out, or clearly unfinished.
 - If a line continues a chain of equal expressions (starts with "="), give just the expression after the "=".
-- kind: equation, inequality, expression, crossed_out, not_math, or incomplete.
-- ai_verdict: does this line follow correctly from the line before it (the first line follows from the problem)? \
-ok, error, or unclear. A line that correctly carries forward an earlier mistake is ok; only the line where the \
-mistake is made is an error.
+- kind: equation, inequality, expression, formula, intermediate, crossed_out, not_math, or incomplete.
+- formula: a general formula, identity, definition or rule related to the problem that the student wrote down \
+for reference rather than derived from the line before, e.g. the quadratic formula x = (-b ± sqrt(b^2 - 4ac))/(2a), \
+the discriminant b^2 - 4ac, coordinate conversions like x = ρ sin φ cos θ or r^2 = x^2 + y^2, an identity like \
+sin^2 θ + cos^2 θ = 1, a derivative or integral rule, a series formula, or a substitution they define such as \
+u = x^2 + 1. It is fine for it to use letters that are not in the problem. Use formula only while it is in general \
+symbols; once the student plugs this problem's numbers or expressions into it, it is a normal step. Writing a \
+formula is never a wrong turn merely because it is not derived from the previous line.
+- intermediate: independent supporting work, such as a characteristic equation, a substitution, a boundary \
+condition calculation, or the general solution of an ODE before fitting its constants. This may use the \
+problem's actual numbers and need not be equivalent to the previous line. Use the whole board and problem \
+to judge it on its own mathematical merits. Correct or uncertain intermediate work gets no wrong-turn mark. \
+For example, for y' = 2y with y(0) = 3, y = C*exp(2x) is valid unfinished work, not a missed condition. \
+Use equation/expression for a proposed final solution so the domain checker can verify completion.
+- ai_verdict: ok, error, or unclear. Judge correctness in context, not merely whether adjacent lines are \
+equivalent. A line that correctly carries forward an earlier mistake is ok; only the line where the mistake \
+is made is an error. Formula and intermediate lines are outside the sequential equivalence chain: error \
+only for an actual mathematical mistake, not for missing derivation, a change of method, or unfinished \
+constants. Use unclear if you cannot establish correctness. Resume ordinary steps against the last ordinary \
+line of work; if a line instead develops independent intermediate work, classify it as intermediate too. \
+Do not use intermediate to excuse an incorrect algebraic transformation or a solution that fails the ODE.
+- final_answer: check EVERY step against the original problem and say whether it gives the complete correct \
+answer. Usually this is a number (including a fraction or radical), or an isolated variable such as x = 3 \
+or x = an expression. A number alone may give the requested variable's value. Merely reaching that shape \
+does not prove correctness: check the value, all required solutions, and any conditions. False for reference \
+formulas, supporting work, unfinished steps, incorrect answers, or uncertainty. Do not infer this from eta_steps.
 
 Then guide the student:
 - next_step_hint: if the work so far is correct but unfinished, a Socratic nudge toward the next move, without \
@@ -212,11 +234,12 @@ BOARD_SCHEMA: dict[str, Any] = {
                     "line": {"type": "integer"},
                     "latex": {"type": "string"},
                     "sympy": {"type": "string"},
-                    "kind": {"type": "string", "enum": ["equation", "inequality", "expression", "crossed_out",
-                                                        "not_math", "incomplete"]},
+                    "kind": {"type": "string", "enum": ["equation", "inequality", "expression", "formula", "intermediate",
+                                                        "crossed_out", "not_math", "incomplete"]},
                     "ai_verdict": {"type": "string", "enum": ["ok", "error", "unclear"]},
+                    "final_answer": {"type": "boolean"},
                 },
-                "required": ["line", "latex", "sympy", "kind", "ai_verdict"],
+                "required": ["line", "latex", "sympy", "kind", "ai_verdict", "final_answer"],
                 "additionalProperties": False,
             },
         },
@@ -639,8 +662,13 @@ actually say it out loud — contractions and natural rhythm, never a stiff scri
 
 async def explain_line(problem: str, lines: list[dict], line: int, detail: str, note: str = "",
                        lang: str = "en") -> dict:
-    work = "\n".join(f"line {l['line']}: {l['latex']}" for l in lines if l.get("latex"))
+    work = "\n".join(f"line {l['line']}: {l['latex']}"
+                     f"{' (reference formula, not a step)' if l.get('kind') == 'formula' else ''}"
+                     for l in lines if l.get("latex"))
+    flagged_formula = any(l.get("line") == line and l.get("kind") == "formula" for l in lines)
+    wrong = ("it is a reference formula the student misremembered; hint toward the correct formula"
+             if flagged_formula else "it does not follow from the line before it")
     prompt = (f"Problem: {problem}\n\nThe student's work so far:\n{work}\n\n"
-              f"Line {line} is the first wrong turn: it does not follow from the line before it"
+              f"Line {line} is the first wrong turn: {wrong}"
               f"{' (for you only: ' + detail + ')' if detail else ''}.\n{HINT_RULES}{lang_note(lang)}")
     return await _structured(prompt, EXPLAIN_SCHEMA, max_tokens=4000)

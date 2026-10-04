@@ -470,7 +470,7 @@ code {
 
 .board-stage {
   position: relative;
-  flex: 0 1 auto;
+  flex: 1;
   min-height: 0;
   display: flex;
 }
@@ -596,7 +596,7 @@ code {
 .status-pill {
   position: absolute;
   top: calc(10px + var(--q-band, 0px));
-  right: 12px;
+  right: 84px;
   z-index: 6;
   display: inline-flex;
   align-items: center;
@@ -674,11 +674,12 @@ code {
 }
 
 .board-scroll {
-  /* Fill the space, but no taller than the board itself. */
-  flex: 0 1 auto;
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
   background: var(--paper);
   border-radius: var(--radius);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 20px 50px rgba(0, 0, 0, 0.45);
@@ -761,6 +762,15 @@ canvas.ink {
 
 canvas.ink.tool-eraser {
   cursor: cell;
+}
+
+canvas.ink.tool-scroll {
+  touch-action: pan-y;
+  cursor: grab;
+}
+
+canvas.ink.tool-scroll:active {
+  cursor: grabbing;
 }
 
 /* ---------- Markers ---------- */
@@ -1468,6 +1478,15 @@ canvas.ink.tool-eraser {
 /* ---------- Small screens ---------- */
 
 @media (max-width: 960px) {
+  .status-pill {
+    right: 12px;
+  }
+
+  .board-scroll {
+    /* Let the last work line move above the floating toolbar. */
+    padding-bottom: 76px;
+  }
+
   .topbar {
     flex-wrap: wrap;
   }

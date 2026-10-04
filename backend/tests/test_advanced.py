@@ -117,6 +117,28 @@ def test_ode_initial_condition_and_constant_acceleration():
     assert motion == {1: "valid"} and arrived
 
 
+def test_ode_general_solution_is_valid_before_fitting_initial_conditions():
+    problem = "diff(y(x), x) = 2*y(x); y(0) = 3"
+    general = "y(x) = C1*exp(2*x)"
+    verdicts, arrived = line_verdicts(problem, [general])
+    assert verdicts == {1: "valid"} and not arrived
+    verdicts, arrived = line_verdicts(problem, [general, "y(x) = 3*exp(2*x)"])
+    assert verdicts == {1: "valid", 2: "valid"} and arrived
+
+
+@pytest.mark.parametrize("solution", ["y(x) = 4*exp(2*x)", "y(x) = C1*exp(3*x)"])
+def test_ode_wrong_solutions_are_still_rejected(solution):
+    verdicts, arrived = line_verdicts("diff(y(x), x) = 2*y(x); y(0) = 3", [solution])
+    assert verdicts == {1: "invalid"} and not arrived
+
+
+def test_ode_constants_do_not_excuse_incompatible_conditions():
+    verdicts, arrived = line_verdicts(
+        "diff(y(x), x, 2) = 0; y(0) = 3", ["y(x) = C1*x + 4"],
+    )
+    assert verdicts == {1: "invalid"} and not arrived
+
+
 def test_heat_equation_and_laplace_equation():
     heat, arrived = line_verdicts(
         "diff(u(x, t), t) = diff(u(x, t), x, 2)",
