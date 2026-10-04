@@ -116,6 +116,7 @@ async def read_problem(image_png_b64: str) -> dict:
 async def explain_line(problem: str, lines: list[dict], line: int, detail: str, note: str = "",
                        lang: str = "en") -> dict:
     # `detail` can contain solution values; only the student-safe `note` is used.
+    prev = next((l.get("latex") for l in lines if l.get("line") == line - 1), None)
     return {
         "hints": [
             f"Look closely at line {line}. Does it say the same thing as the line above it?",
@@ -123,6 +124,7 @@ async def explain_line(problem: str, lines: list[dict], line: int, detail: str, 
             f"Rewrite line {line} so it's equivalent to line {line - 1}.",
         ],
         "hint_ink": ["check each term", "carry it carefully", "rewrite this step"],
+        "fix_line": prev or "2x - 6 + 4 = 10",
         "spoken_nudge": f"Recalculating. Take another look at line {line}.",
     }
 

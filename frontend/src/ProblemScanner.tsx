@@ -143,7 +143,7 @@ export function ProblemScanner({ onUse, onTrip, onClose }: Props) {
 
   const loadPdf = async (file: File) => {
     // Loaded on demand so the main bundle stays light.
-    const pdfjs = await import("pdfjs-dist");
+    const pdfjs = await import("pdfjs-dist/build/pdf.mjs");
     const worker = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
     pdfjs.GlobalWorkerOptions.workerSrc = worker;
     const doc = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
