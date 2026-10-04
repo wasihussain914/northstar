@@ -10,8 +10,6 @@ Work naturally on a digital whiteboard. Untangled follows your work line by line
 
 It doesn't hand you the destination. **It gives you turn-by-turn guidance.**
 
-**Built for Cornell Hacks 2026 — Theme: Navigation.**
-
 ---
 
 ## The Problem
@@ -174,8 +172,6 @@ http://localhost:5173
 ```
 
 For phone/iPad setup on the same Wi-Fi, see `IPAD.md`.
-
-> ⚠️ Never commit API keys.
 
 ---
 
