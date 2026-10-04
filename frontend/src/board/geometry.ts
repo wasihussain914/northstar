@@ -127,21 +127,44 @@ export function snapshot(strokes: Stroke[]): Snapshot | null {
   if (strokes.length === 0) return null;
   const signatures = lineSignatures(strokes);
   const lines = [...signatures.keys()].sort((a, b) => a - b);
+  return { image: render(strokes, lines, true, EXPORT_SCALE), lines, signatures };
+}
+
+/** The handwriting alone, for the homework write-up: no line numbers, lighter rules, smaller file. */
+export function inkImage(strokes: Stroke[]): string | null {
+  if (strokes.length === 0) return null;
+  const lines = [...lineSignatures(strokes).keys()].sort((a, b) => a - b);
+  return render(strokes, lines, false, 1);
+}
+
+/** The handwriting as a canvas at print resolution, for the PDF export. */
+export function inkCanvas(strokes: Stroke[], scale = 2): HTMLCanvasElement | null {
+  if (strokes.length === 0) return null;
+  const lines = [...lineSignatures(strokes).keys()].sort((a, b) => a - b);
+  return renderCanvas(strokes, lines, false, scale);
+}
+
+function render(strokes: Stroke[], lines: number[], labels: boolean, scale: number): string {
+  return renderCanvas(strokes, lines, labels, scale).toDataURL("image/png");
+}
+
+function renderCanvas(strokes: Stroke[], lines: number[], labels: boolean, scale: number): HTMLCanvasElement {
   const first = lines[0], last = lines[lines.length - 1];
   const top = (first - 1) * LINE_H;
   const height = (last - first + 1) * LINE_H;
   const maxX = Math.max(...strokes.map((s) => s.box.maxX));
-  const width = LABEL_W + Math.max(480, maxX + 32);
+  const margin = labels ? LABEL_W : 20;
+  const width = margin + Math.max(labels ? 480 : 320, maxX + 32);
 
   const canvas = document.createElement("canvas");
-  canvas.width = Math.round(width * EXPORT_SCALE);
-  canvas.height = Math.round(height * EXPORT_SCALE);
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
   const ctx = canvas.getContext("2d")!;
-  ctx.scale(EXPORT_SCALE, EXPORT_SCALE);
+  ctx.scale(scale, scale);
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
 
-  ctx.strokeStyle = "#e3e6ea";
+  ctx.strokeStyle = labels ? "#e3e6ea" : "#eef0f3";
   ctx.lineWidth = 1;
   for (let l = first; l <= last + 1; l++) {
     const y = (l - first) * LINE_H + 0.5;
@@ -151,25 +174,27 @@ export function snapshot(strokes: Stroke[]): Snapshot | null {
     ctx.stroke();
   }
 
-  ctx.font = "600 18px Inter, system-ui, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  for (const l of lines) {
-    const cy = (l - first) * LINE_H + LINE_H / 2;
-    ctx.fillStyle = "#1d4ed8";
-    roundRect(ctx, 12, cy - 15, 38, 30, 6);
-    ctx.fill();
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(String(l), 31, cy + 1);
+  if (labels) {
+    ctx.font = "600 18px Inter, system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const l of lines) {
+      const cy = (l - first) * LINE_H + LINE_H / 2;
+      ctx.fillStyle = "#1d4ed8";
+      roundRect(ctx, 12, cy - 15, 38, 30, 6);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(String(l), 31, cy + 1);
+    }
   }
 
   ctx.save();
-  ctx.translate(LABEL_W, -top);
+  ctx.translate(margin, -top);
   ctx.fillStyle = "#111111";
   for (const s of strokes) ctx.fill(strokePath(s));
   ctx.restore();
 
-  return { image: canvas.toDataURL("image/png"), lines, signatures };
+  return canvas;
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {

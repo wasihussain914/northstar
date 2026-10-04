@@ -26,10 +26,15 @@ interface Props {
   nextLabel?: string;
   /** Detour-practice card, shown with the trip summary. */
   practiceCard?: React.ReactNode;
+  /** Where the solution went (the homework doc), shown on the trip summary. */
+  docNote?: React.ReactNode;
+  /** Write the rest of the solution on the board, in the loaded handwriting. */
+  onFinish?: () => void;
+  finishing?: boolean;
   children?: React.ReactNode;
 }
 
-export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, lastInkLine, onHint, onNewTrip, nextLabel, practiceCard, children }: Props) {
+export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, lastInkLine, onHint, onNewTrip, nextLabel, practiceCard, docNote, onFinish, finishing, children }: Props) {
   const { result, errorLine, errorKey, phase, failure } = tutor;
   const [hintsShown, setHintsShown] = useState(0);
   const [showNext, setShowNext] = useState(false);
@@ -61,10 +66,10 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
         onRetry={tutor.checkNow}
       />
 
-      {trip.durationMs != null && <TripSummary trip={trip} onNewTrip={onNewTrip} nextLabel={nextLabel ?? "New problem"} />}
+      {trip.durationMs != null && <TripSummary trip={trip} onNewTrip={onNewTrip} nextLabel={nextLabel ?? "New problem"} docNote={docNote} />}
       {trip.durationMs != null && practiceCard}
 
-      {errorLine != null && result && result.hints.length > 0 && (
+      {errorLine != null && result && (result.hints.length > 0 || tutor.hintsLoading) && (
         <section className="card hint-card">
           <header>
             <span className="eyebrow amber">Recalculating</span>
@@ -78,11 +83,33 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
               </li>
             ))}
           </ol>
-          {hintsShown < result.hints.length && (
+          {hintsShown < result.hints.length ? (
             <button className="btn primary" onClick={reveal}>
               {hintsShown === 0 ? "Give me a hint" : HINT_LABELS[hintsShown]}
             </button>
-          )}
+          ) : tutor.hintsLoading ? (
+            <button className="btn primary" disabled>
+              Thinking of a hint…
+            </button>
+          ) : null}
+        </section>
+      )}
+
+      {onFinish && errorLine == null && !result?.arrived && (
+        <section className="card finish-card">
+          <span className="eyebrow">Autopilot</span>
+          <p className="next-hint">Written in your handwriting, straight onto the page. It still gets checked line by line.</p>
+          <button className="btn wide" onClick={onFinish} disabled={finishing}>
+            {finishing ? "Writing…" : phase === "empty" ? "Autofill the solution" : "Finish the rest for me"}
+          </button>
+        </section>
+      )}
+
+      {result?.board_question && (
+        <section className="card asked-card">
+          <span className="eyebrow">You wrote</span>
+          <p className="asked-q">“{result.board_question.question}”</p>
+          <p className="asked-a">{result.board_question.answer}</p>
         </section>
       )}
 
@@ -134,7 +161,7 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
   );
 }
 
-function TripSummary({ trip, onNewTrip, nextLabel }: { trip: Trip; onNewTrip: () => void; nextLabel: string }) {
+function TripSummary({ trip, onNewTrip, nextLabel, docNote }: { trip: Trip; onNewTrip: () => void; nextLabel: string; docNote?: React.ReactNode }) {
   const secs = Math.round((trip.durationMs ?? 0) / 1000);
   const time = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`;
   const recap =
@@ -163,6 +190,7 @@ function TripSummary({ trip, onNewTrip, nextLabel }: { trip: Trip; onNewTrip: ()
           <dd>{time}</dd>
         </div>
       </dl>
+      {docNote}
       <button className="btn primary wide" onClick={onNewTrip}>
         {nextLabel}
       </button>

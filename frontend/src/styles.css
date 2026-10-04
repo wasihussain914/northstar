@@ -1679,6 +1679,21 @@ canvas.ink.tool-eraser {
   font-size: 13px;
 }
 
+.camera-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.camera-stage video {
+  width: 100%;
+  max-height: 62vh;
+  object-fit: contain;
+  background: #111;
+  border-radius: 18px;
+}
+
 .crop-stage {
   min-height: 0;
   overflow: auto;
@@ -2001,4 +2016,1026 @@ canvas.ink.tool-eraser {
   display: inline-flex;
   align-items: center;
   cursor: pointer;
+}
+
+/* ---------- Pip, the co-pilot ---------- */
+
+.pip {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  z-index: 7;
+  width: 128px;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none; /* only the figure and buttons take taps, never the paper around them */
+}
+
+.pip-figure {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pip-figure svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  /* the paper-cutout look: a hard little shadow under every piece */
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.16)) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.12));
+}
+
+.pip svg g,
+.pip svg path,
+.pip svg ellipse,
+.pip svg circle,
+.pip svg text {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.pip-body {
+  transform-box: view-box !important;
+  transform-origin: 80px 190px !important;
+  animation: pip-bob 3.2s ease-in-out infinite;
+}
+
+.pip-head {
+  transform-box: view-box !important;
+  transform-origin: 80px 135px !important;
+  transition: transform 0.35s cubic-bezier(0.3, 1.4, 0.6, 1);
+}
+
+.pip-arm-l {
+  transform-box: view-box !important;
+  transform-origin: 45px 150px !important;
+  transition: transform 0.35s cubic-bezier(0.3, 1.4, 0.6, 1);
+}
+
+.pip-arm-r {
+  transform-box: view-box !important;
+  transform-origin: 115px 150px !important;
+  transition: transform 0.35s cubic-bezier(0.3, 1.4, 0.6, 1);
+}
+
+.pip-eyes {
+  animation: pip-blink 4.8s infinite;
+}
+
+.pip-look {
+  transition: transform 0.3s ease;
+}
+
+.pip-brow {
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.25s ease;
+}
+
+.pip-cheek {
+  opacity: 0.55;
+  transition: opacity 0.3s ease;
+}
+
+.pip-m,
+.pip-dizzy,
+.pip-think,
+.pip-q {
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.pip-m-smile {
+  opacity: 1;
+}
+
+/* Talking: the mouth flaps while the GPS voice speaks. */
+.pip.talking .pip-m {
+  opacity: 0;
+}
+
+.pip.talking .pip-m-open {
+  opacity: 1; /* shaped frame by frame by the lip-sync in Mascot.tsx */
+}
+
+/* Moods */
+.pip.mood-happy .pip-cheek {
+  opacity: 0.9;
+}
+
+/* Watching you write: eyes down toward the board. */
+.pip.mood-watching .pip-look {
+  transform: translate(-3px, 3px);
+}
+
+.pip.mood-thinking .pip-look {
+  transform: translate(3px, -4px);
+}
+
+.pip.mood-thinking .pip-brow {
+  opacity: 1;
+  transform: translateY(-3px);
+}
+
+.pip.mood-thinking:not(.talking) .pip-m-smile {
+  opacity: 0;
+}
+
+.pip.mood-thinking:not(.talking) .pip-m-o {
+  opacity: 1;
+}
+
+.pip.mood-thinking .pip-think {
+  opacity: 1;
+}
+
+.pip.mood-thinking .pip-think circle {
+  animation: pip-dots 1.2s ease-in-out infinite;
+}
+
+.pip.mood-thinking .pip-think circle:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.pip.mood-thinking .pip-think circle:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.pip.mood-worried .pip-brow {
+  opacity: 1;
+}
+
+.pip.mood-worried .pip-brow-l {
+  transform: rotate(-16deg) translateY(-2px);
+}
+
+.pip.mood-worried .pip-brow-r {
+  transform: rotate(16deg) translateY(-2px);
+}
+
+.pip.mood-worried:not(.talking) .pip-m-smile {
+  opacity: 0;
+}
+
+.pip.mood-worried:not(.talking) .pip-m-worry {
+  opacity: 1;
+}
+
+.pip.mood-worried .pip-head {
+  transform: rotate(-7deg);
+}
+
+/* an "uh-oh" shrug */
+.pip.mood-worried .pip-arm-l {
+  transform: rotate(28deg);
+}
+
+.pip.mood-worried .pip-arm-r {
+  transform: rotate(-28deg);
+}
+
+/* One-shot moves go on the figure, a separate layer, so the idle bob on
+   .pip-body never restarts (and never jumps) when the mood changes. */
+.pip.mood-worried .pip-figure {
+  animation: pip-shake 0.5s ease-in-out;
+}
+
+.pip.mood-worried .pip-q {
+  opacity: 1;
+  animation: pip-pop 0.4s cubic-bezier(0.3, 1.6, 0.6, 1);
+}
+
+.pip.mood-party .pip-figure {
+  transform-origin: 50% 100%;
+  animation: pip-jump 0.55s ease-out 4;
+}
+
+.pip.mood-party .pip-arm-l {
+  transform: rotate(150deg);
+}
+
+.pip.mood-party .pip-arm-r {
+  transform: rotate(-150deg);
+}
+
+.pip.mood-party .pip-cheek {
+  opacity: 1;
+}
+
+.pip.mood-party:not(.talking) .pip-m-smile {
+  opacity: 0;
+}
+
+.pip.mood-party:not(.talking) .pip-m-open {
+  opacity: 1;
+}
+
+.pip.mood-dizzy .pip-eyes {
+  opacity: 0;
+}
+
+.pip.mood-dizzy .pip-dizzy {
+  opacity: 1;
+}
+
+.pip.mood-dizzy .pip-dizzy path {
+  animation: pip-spin 1.4s linear infinite;
+}
+
+/* Speech bubble: captions of whatever Pip says */
+.pip-bubble {
+  position: absolute;
+  right: 62%;
+  bottom: calc(100% + 4px);
+  width: max-content;
+  max-width: min(260px, 70vw);
+  background: #fff;
+  color: #1b1f2a;
+  border-radius: 16px 16px 4px 16px;
+  padding: 9px 13px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12), 0 10px 24px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  transform: translateY(6px) scale(0.92);
+  transform-origin: 100% 100%;
+  transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.3, 1.5, 0.6, 1);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pip-bubble.show {
+  opacity: 1;
+  transform: none;
+}
+
+.pip-hide {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  color: #6b7280;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 1;
+}
+
+.pip:hover .pip-hide,
+.pip-hide:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .pip-hide {
+    opacity: 0.7;
+  }
+}
+
+.pip-tab {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  z-index: 7;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.92);
+  color: #1f3a6b;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pip-tab svg {
+  width: 14px;
+  height: 14px;
+  color: #f5c451;
+}
+
+@media (max-width: 900px) {
+  .pip {
+    width: 104px;
+  }
+}
+
+@media (max-width: 560px) {
+  .pip {
+    width: 72px;
+    right: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pip,
+  .pip * {
+    animation: none !important;
+  }
+}
+
+@keyframes pip-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes pip-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+
+@keyframes pip-dots {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@keyframes pip-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+@keyframes pip-pop {
+  from { transform: scale(0.2); }
+  to { transform: scale(1); }
+}
+
+@keyframes pip-jump {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  15% { transform: translateY(0) scaleY(0.9); }
+  50% { transform: translateY(-22px) scaleY(1.04); }
+}
+
+@keyframes pip-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* When the route drawer slides over the board, Pip hops out to stand just
+   left of it, above the dimmed backdrop, so his reaction to a wrong turn
+   stays visible. (The drawer floats 16px in from the right edge.) On phones
+   the drawer is nearly full-screen, so instead he perches small on its
+   top-left corner, over the brand mark, with his bubble opening rightward. */
+@media (max-width: 699px) {
+  .pip.beside-drawer {
+    position: fixed;
+    top: calc(84px + 8px + env(safe-area-inset-top));
+    left: calc(16px + 12px + env(safe-area-inset-left));
+    right: auto;
+    bottom: auto;
+    width: 52px;
+    z-index: 32;
+    animation: pip-step-aside 0.35s cubic-bezier(0.3, 1.4, 0.6, 1);
+  }
+  .pip.beside-drawer .pip-bubble {
+    left: calc(100% + 6px);
+    right: auto;
+    top: 4px;
+    bottom: auto;
+    max-width: min(240px, calc(100vw - 120px));
+    border-radius: 4px 16px 16px 16px;
+    transform-origin: 0 0;
+  }
+  .pip.beside-drawer .pip-hide {
+    display: none;
+  }
+}
+
+@media (min-width: 700px) {
+  .pip.beside-drawer {
+    position: fixed;
+    right: calc(min(380px, 100vw - 32px) + 16px + 12px + env(safe-area-inset-right));
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    z-index: 32;
+    animation: pip-step-aside 0.35s cubic-bezier(0.3, 1.4, 0.6, 1);
+  }
+}
+
+@keyframes pip-step-aside {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* Karaoke caption: words light up as Pip says them */
+.pip-bubble .ahead {
+  color: #a3a9b5;
+}
+
+.pip-bubble .said {
+  color: inherit;
+  transition: color 0.12s ease;
+}
+
+/* ---------- Homework: the solved problems, written up on paper for the PDF ---------- */
+
+.hw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px 0 12px;
+}
+
+.hw-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.hw-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  background: var(--inverse-bg);
+  color: var(--inverse-fg);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.hw-btn.filed .hw-count {
+  background: #c7f36b;
+  color: #161616;
+}
+
+.hw-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cobalt-text);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.hw-link svg {
+  width: 16px;
+  height: 16px;
+}
+
+.hw-link:hover {
+  text-decoration: underline;
+}
+
+.hw-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: start center;
+  padding: 18px;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.hw-sheet {
+  width: min(820px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 28px;
+  background: var(--glass-strong);
+  box-shadow: inset 0 0 0 1px var(--glass-edge), 0 30px 80px rgba(0, 0, 0, 0.5);
+  animation: rise 0.3s var(--ease);
+}
+
+.hw-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hw-toolbar h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+
+.hw-toolbar-sub {
+  display: block;
+  font-size: 13px;
+  color: var(--faint);
+}
+
+.hw-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hw-file-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--caution-soft);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.hw-file-bar .btn.small {
+  margin: 0;
+}
+
+/* The paper itself is always white with dark ink, on screen and in print. */
+.hw-paper {
+  padding: 48px 56px 40px;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #161616;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08), 0 12px 40px rgba(0, 0, 0, 0.25);
+  font-size: 15.5px;
+  line-height: 1.55;
+  color-scheme: light;
+}
+
+.hw-head {
+  padding-bottom: 18px;
+  margin-bottom: 26px;
+  border-bottom: 1.5px solid #161616;
+}
+
+.hw-field {
+  display: block;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  border-bottom: 1px dashed transparent;
+  background: none;
+  color: inherit;
+  font: inherit;
+  outline: none;
+}
+
+.hw-field:hover,
+.hw-field:focus {
+  border-bottom-color: rgba(0, 0, 0, 0.3);
+}
+
+.hw-field::placeholder {
+  color: #9a9a9a;
+}
+
+.hw-title {
+  font-family: var(--display);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin-bottom: 8px;
+}
+
+.hw-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 16px;
+  align-items: center;
+  color: #474747;
+  font-size: 14px;
+}
+
+.hw-meta .hw-field {
+  width: auto;
+}
+
+.hw-date {
+  white-space: nowrap;
+}
+
+.hw-empty {
+  padding: 40px 0 30px;
+  text-align: center;
+  color: #474747;
+}
+
+.hw-empty p {
+  margin: 0 auto;
+  max-width: 420px;
+  font-family: var(--display);
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.hw-empty-sub {
+  margin-top: 10px !important;
+  font-family: var(--font) !important;
+  font-size: 14px !important;
+  color: #8a8a8a;
+}
+
+.hw-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.hw-problem {
+  position: relative;
+  break-inside: avoid;
+}
+
+.hw-problem-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.hw-n {
+  flex: none;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 17px;
+  min-width: 26px;
+}
+
+.hw-q {
+  flex: 1;
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.hw-q .math {
+  font-size: 1.05em;
+}
+
+.hw-verb {
+  margin-right: 8px;
+}
+
+.hw-problem-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.hw-problem:hover .hw-problem-actions,
+.hw-problem:focus-within .hw-problem-actions {
+  opacity: 1;
+}
+
+.hw-problem-actions .icon-btn {
+  width: 30px;
+  height: 30px;
+  color: #474747;
+}
+
+.hw-problem-actions .icon-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.hw-scan {
+  display: block;
+  max-width: 100%;
+  max-height: 120px;
+  margin: 8px 0 4px 36px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.hw-steps {
+  list-style: none;
+  margin: 10px 0 0 36px;
+  padding: 0 0 0 16px;
+  border-left: 2px solid rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hw-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+}
+
+.hw-step-math .math {
+  font-size: 1.08em;
+}
+
+.hw-step.final .hw-step-math {
+  display: inline-block;
+  padding: 3px 12px;
+  border: 1.5px solid #161616;
+  border-radius: 4px;
+}
+
+.hw-check {
+  color: #3c8a2e;
+  font-size: 14px;
+}
+
+.hw-problem.unfinished .hw-steps {
+  border-left-color: var(--amber);
+}
+
+.hw-unfinished {
+  margin: 8px 0 0 52px;
+  font-size: 13px;
+  color: var(--amber-text);
+}
+
+.hw-ink {
+  display: block;
+  max-width: calc(100% - 36px);
+  max-height: 260px;
+  margin: 14px 0 0 36px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.hw-note {
+  display: block;
+  width: calc(100% - 36px);
+  margin: 10px 0 0 36px;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px dashed transparent;
+  background: none;
+  color: #161616;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  resize: none;
+  overflow: hidden;
+  outline: none;
+}
+
+.hw-note:hover,
+.hw-note:focus {
+  border-bottom-color: rgba(0, 0, 0, 0.3);
+}
+
+.hw-note::placeholder {
+  color: #b0b0b0;
+}
+
+.hw-foot {
+  margin-top: 34px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+  font-size: 12.5px;
+  color: #8a8a8a;
+}
+
+@media (max-width: 700px) {
+  .hw-backdrop {
+    padding: 10px;
+  }
+  .hw-sheet {
+    padding: 12px;
+    border-radius: 20px;
+  }
+  .hw-paper {
+    padding: 26px 20px 24px;
+  }
+  .hw-meta {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .hw-btn-text {
+    display: none;
+  }
+  .hw-btn {
+    padding: 0 12px;
+  }
+  .hw-problem-actions {
+    opacity: 1;
+  }
+}
+
+/* Printing the homework: only the paper, white, one problem never split across pages. */
+@media print {
+  @page {
+    margin: 18mm 16mm;
+  }
+  html,
+  body,
+  #root {
+    height: auto;
+    background: #fff;
+  }
+  .app.doc-open {
+    height: auto;
+    display: block;
+    background: #fff;
+  }
+  .app.doc-open > :not(.hw-backdrop) {
+    display: none !important;
+  }
+  .hw-backdrop {
+    position: static;
+    inset: auto;
+    display: block;
+    padding: 0;
+    overflow: visible;
+    background: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .hw-sheet {
+    width: auto;
+    padding: 0;
+    gap: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    animation: none;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .hw-paper {
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+    font-size: 12.5pt;
+  }
+  .hw-field,
+  .hw-note {
+    border-bottom-color: transparent !important;
+  }
+  .hw-field:placeholder-shown,
+  .hw-note:placeholder-shown {
+    display: none;
+  }
+  .hw-problem-actions {
+    display: none;
+  }
+  .hw-ink,
+  .hw-scan {
+    max-height: 70mm;
+    box-shadow: none;
+    border: 1px solid #ddd;
+  }
+  .hw-check {
+    color: #3c8a2e;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* A question written on the paper, answered. */
+.asked-q {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.asked-a {
+  margin: 0;
+}
+
+/* Scratchpad verdicts under the try bar. */
+.type-bar-wrap {
+  flex-shrink: 0;
+}
+
+.try-verdict {
+  margin: 6px 2px 0;
+  font-size: 14px;
+  animation: rise 0.25s ease-out;
+}
+
+.try-ok {
+  color: #7fc24a;
+}
+
+.try-error {
+  color: var(--amber-text);
+}
+
+.try-answered {
+  color: var(--cobalt-text);
+}
+
+/* Ask out loud while writing: the mic that lives on the paper. */
+.floating-mic {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  z-index: 8;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  border: none;
+  color: var(--text);
+}
+
+.floating-mic svg {
+  width: 24px;
+  height: 24px;
+}
+
+.floating-mic.state-listening {
+  background: var(--coral);
+  color: #fff;
+  box-shadow: 0 0 0 0 rgba(255, 106, 90, 0.55);
+  animation: mic-pulse 1.2s ease-out infinite;
+}
+
+.mic-thinking {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2.5px solid var(--tint-4);
+  border-top-color: var(--text);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes mic-pulse {
+  to { box-shadow: 0 0 0 16px rgba(255, 106, 90, 0); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- Autofill: write the whole solution on the page ---------- */
+
+.autofill-btn {
+  position: absolute;
+  left: 86px; /* beside the mic, clear of Pip whichever side he's on */
+  bottom: 24px;
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 18px 0 14px;
+  border: 0;
+  border-radius: 9999px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.15s var(--ease);
+}
+
+.autofill-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.autofill-btn:hover {
+  background: var(--tint-3);
+}
+
+.autofill-btn:active {
+  transform: scale(0.98);
+}
+
+.autofill-btn.writing {
+  background: var(--inverse-bg);
+  color: var(--inverse-fg);
+}
+
+@media (max-width: 560px) {
+  .autofill-btn {
+    height: 40px;
+    font-size: 13.5px;
+  }
 }

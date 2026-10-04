@@ -34,8 +34,9 @@ MODEL = os.environ.get("NORTHSTAR_MODEL", "claude-sonnet-5-5")
 # Flash is the live-feedback counterpart to Sonnet: vision plus structured JSON,
 # without a long thinking pass.
 GEMINI_MODEL = "gemini-3.8-flash"
-# Grok 4 is xAI's multimodal flagship: vision plus strict structured JSON.
-XAI_MODEL = "grok-4"
+# Non-reasoning Grok still reads the photo. SymPy checks the math, so the
+# thinking pass only adds latency on a live board.
+XAI_MODEL = "grok-4.20-non-reasoning"
 
 _client: anthropic.AsyncAnthropic | None = None
 _gemini: genai.Client | None = None
@@ -150,7 +151,12 @@ If a line is ambiguous, pick the most likely reading.
 - latex: the line as LaTeX (no surrounding $).
 - sympy: the line in the dialect below. Leave it empty if the line is prose, crossed out, or clearly unfinished.
 - If a line continues a chain of equal expressions (starts with "="), give just the expression after the "=".
-- kind: equation, inequality, expression, crossed_out, not_math, or incomplete.
+- kind: equation, inequality, expression, claim, question, crossed_out, not_math, or incomplete. A claim is a \
+proof step stated in words, possibly with math inside it ("let m be the minimum weight", "since C is linear, \
+v + w is in C", "therefore d = m"). Proof steps are never not_math: judge each claim's ai_verdict by whether \
+it is true and follows from the lines before it (and the problem), exactly as you would a computation line. \
+For a claim, sympy may be empty. A question is the student writing TO you ("what do I do?", "help", "is this \
+right so far?", "im not sure what to do") — transcribe it verbatim into latex as plain text and never judge it.
 - ai_verdict: does this line follow correctly from the line before it (the first line follows from the problem)? \
 ok, error, or unclear. A line that correctly carries forward an earlier mistake is ok; only the line where the \
 mistake is made is an error.
@@ -160,7 +166,7 @@ Then guide the student:
 doing it. Empty if finished or if there is an error.
 - next_step_ink: a very short phrase (at most four words) matching next_step_hint for a teacher's red margin note, \
 e.g. "isolate the variable", "combine terms". Empty if there is an error or the work is finished.
-- on_track_message: a few warm words of encouragement that fit where they are.
+- on_track_message: a few warm words of encouragement that fit where they are (at most ten words).
 - eta_steps: your estimate of how many more lines a typical student needs to reach the answer from here.
 - route_note: if there is a noticeably shorter or cleaner route than the one they are taking, mention it in one \
 sentence without solving. Otherwise empty.
@@ -172,8 +178,12 @@ number_theory, prove, pigeonhole, balance, physics, other.
 Dialect for sympy and problem_sympy. Use * for multiplication (2*x). Single-letter variables only, plus C1, C2, ...
 - Algebra and trig: + - * / ^ ( ) = < > <= >=, and sqrt, abs, log, ln, exp, factorial, binomial, sin, cos, tan, \
 asin, acos, atan, sec, csc, cot, sinh, cosh, tanh, pi.
+- Several solutions on one line — side by side ("x = 0   x = 5"), or joined by commas, "or", "and", "y" or \
+another word in the student's language — are a SOLUTION LIST, never a product: sympy is "x = 0 or x = 5".
 - Calculus: diff(f, x), diff(f, x, 2), diff(f, x, y), integrate(f, x), integrate(f, x, a, b), limit(f, x, a), \
 limleft(f, x, a), limright(f, x, a), grad(f, x, y).
+- Substitution / by-parts bookkeeping keeps its differentials literally: "u = x^2", "du = 2*x*dx", \
+"dv = exp(x)*dx" (du, dv, dx as plain names). Never drop the dx, and never rewrite these as diff(...).
 - Sums: summation(term, k, 1, n).
 - ODEs: the unknown is a function, as in diff(y(x), x, 2) + y(x) = 0. A proposed solution is y(x) = .... \
 Initial conditions follow a semicolon: diff(y(x), x) = 2*y(x); y(0) = 3. Physics motion is the same, \
@@ -212,8 +222,8 @@ BOARD_SCHEMA: dict[str, Any] = {
                     "line": {"type": "integer"},
                     "latex": {"type": "string"},
                     "sympy": {"type": "string"},
-                    "kind": {"type": "string", "enum": ["equation", "inequality", "expression", "crossed_out",
-                                                        "not_math", "incomplete"]},
+                    "kind": {"type": "string", "enum": ["equation", "inequality", "expression", "claim",
+                                                        "question", "crossed_out", "not_math", "incomplete"]},
                     "ai_verdict": {"type": "string", "enum": ["ok", "error", "unclear"]},
                 },
                 "required": ["line", "latex", "sympy", "kind", "ai_verdict"],
@@ -495,15 +505,25 @@ async def _structured(content: list[dict] | str, schema: dict, max_tokens: int =
 
 
 async def read_board(problem: str, image_png_b64: str, line_numbers: list[int],
-                     typed: dict[int, str] | None = None, lang: str = "en") -> dict:
+                     typed: dict[int, str] | None = None, lang: str = "en",
+                     known: dict[int, dict] | None = None) -> dict:
     labels = ", ".join(str(n) for n in line_numbers) or "none"
     text = (f"Problem the student is solving: {problem or '(not given; infer it from the board)'}\n"
             f"Labeled lines on the board: {labels}{lang_note(lang)}")
     if typed:
-        known = "\n".join(f"line {n}: {t}" for n, t in sorted(typed.items()) if n in line_numbers)
-        if known:
+        typed_text = "\n".join(f"line {n}: {t}" for n, t in sorted(typed.items()) if n in line_numbers)
+        if typed_text:
             text += ("\n\nThe student typed these lines on a keyboard, so this is exactly what they say "
-                     f"(transcribe them from this text, not from the image):\n{known}")
+                     f"(transcribe them from this text, not from the image):\n{typed_text}")
+    if known:
+        known_text = "\n".join(f"line {n}: {k.get('latex') or k.get('sympy')}  [sympy: {k.get('sympy')}]"
+                               for n, k in sorted(known.items()) if n in line_numbers)
+        if known_text:
+            unread = [n for n in line_numbers if n not in known and n not in (typed or {})]
+            text += ("\n\nThese lines were already read on an earlier check and haven't changed. Use them as "
+                     "context for your verdicts and guidance, but do NOT include them in `lines`; the image "
+                     f"shows only the other lines ({', '.join(map(str, unread)) or 'none'}), so `lines` must "
+                     f"contain exactly those:\n{known_text}")
     content = [
         {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": image_png_b64}},
         {"type": "text", "text": text},
@@ -578,16 +598,32 @@ write math in words a person would say ("two x minus six equals ten"), with no L
 Speak like a person: contractions, natural rhythm, warm and brief."""
 
 
+ASK_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "answer": _str("The spoken answer, at most three short sentences, math in words"),
+        "ink": _str("A red margin note of at most five words a teacher would jot next to the question: "
+                    "the key move, never the final answer"),
+    },
+    "required": ["answer", "ink"],
+    "additionalProperties": False,
+}
+
+
 async def ask(problem: str, question: str, image_png_b64: str | None, transcript: dict[int, str] | None,
-              context: str, lang: str = "en") -> dict:
+              context: str, lang: str = "en", want_ink: bool = False) -> dict:
     content: list[dict] = []
     if image_png_b64:
         content.append({"type": "image", "source": {"type": "base64", "media_type": "image/png",
                                                     "data": image_png_b64}})
+    ink_note = ("\nAlso write ink: a red margin note of at most five words a teacher would jot next to the "
+                "question — the key move, never the final answer.") if want_ink else ""
     content.append({"type": "text", "text": (
-        f"{ASK_INSTRUCTIONS}{lang_note(lang)}\n\nProblem: {problem or '(not given)'}\n"
+        f"{ASK_INSTRUCTIONS}{lang_note(lang)}{ink_note}\n\nProblem: {problem or '(not given)'}\n"
         f"What the last check found:\n{context or '(no check yet)'}\n\n"
         f"Student's question: {question}")})
+    if want_ink:
+        return await _structured(content, ASK_SCHEMA, max_tokens=4000)
     if using_grok():
         return {"answer": (await _grok_chat(content, None, 4000)).strip()}
     if using_gemini():
@@ -639,3 +675,27 @@ async def explain_line(problem: str, lines: list[dict], line: int, detail: str, 
               f"Line {line} is the first wrong turn: it does not follow from the line before it"
               f"{' (for you only: ' + detail + ')' if detail else ''}.\n{HINT_RULES}{lang_note(lang)}")
     return await _structured(prompt, EXPLAIN_SCHEMA, max_tokens=4000)
+
+
+FINISH_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "steps": {"type": "array", "items": _str("One line of work, plain text, as the student would write it")},
+    },
+    "required": ["steps"],
+    "additionalProperties": False,
+}
+
+FINISH_RULES = """The student has asked you to finish the solution for them, starting right after their last \
+line. Write the remaining steps exactly as a student would write them on paper: one step per line, plain text \
+(no LaTeX, no words of explanation, no line numbers), using the same notation and style as their lines, \
+with ^ for powers and / for fractions. Carry on from their last line without repeating it, and end with the \
+final answer in solved form (e.g. "x = 6", "x = 0 or x = 5"). At most 8 lines. If their last line is wrong, \
+start from the last correct line and continue from there. If nothing is written yet, start from the problem."""
+
+
+async def finish_work(problem: str, lines: list[dict], lang: str = "en") -> dict:
+    work = "\n".join(f"line {l['line']}: {l['text']}" for l in lines if l.get("text")) or "(nothing yet)"
+    prompt = (f"{FINISH_RULES}{lang_note(lang)}\n\nProblem: {problem or '(not given)'}\n\n"
+              f"The student's work so far:\n{work}")
+    return await _structured(prompt, FINISH_SCHEMA, max_tokens=2000)

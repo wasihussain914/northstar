@@ -219,6 +219,21 @@ def _is_definite(integ: sp.Integral) -> bool:
     return any(len(lim) == 3 for lim in integ.limits)
 
 
+def _split_diff(text: str, var: str) -> tuple[str, str] | None:
+    """'du = 2*x*dx' -> ('u', '2*x'); also 'du/dx = 2*x'. None if not a differential."""
+    m = re.match(rf"^\s*d\s*([a-zA-Z])\s*/\s*d\s*{re.escape(var)}\s*=\s*(.+)$", text)
+    if m:
+        return m.group(1), m.group(2)
+    m = re.match(r"^\s*d\s*([a-zA-Z])\s*=\s*(.+)$", text)
+    if m is None:
+        return None
+    rhs = m.group(2).strip()
+    stripped = re.sub(rf"(?:\*\s*)?d\s*{re.escape(var)}\s*$", "", rhs).strip()
+    if stripped == rhs:
+        return None  # no d<var> factor: not a differential in this variable
+    return m.group(1), (stripped or "1")
+
+
 def check_integrate(problem: str, steps, target: str | None) -> dict | None:
     try:
         stmt = parse_statement(problem)
@@ -254,8 +269,38 @@ def check_integrate(problem: str, steps, target: str | None) -> dict | None:
         except Exception:
             return False
 
+    # Substitution / by-parts bookkeeping. "u = x^2" is a definition — true by
+    # choice — and "du = 2*x*dx" is then provably right or wrong: differentiate
+    # the definition. Definitions are collected from the whole board up front,
+    # so "dv = exp(x)*dx" still verifies when "v = exp(x)" is written below it.
+    defs: dict[str, sp.Expr] = {}
+    for _line, _text in steps:
+        try:
+            st = parse_statement(str(_text))
+        except ParseError:
+            continue
+        if (st.kind == "eq" and isinstance(st.lhs, sp.Symbol) and str(st.lhs) != str(var)
+                and st.rhs is not None and isinstance(st.rhs, sp.Expr)):
+            defs.setdefault(str(st.lhs), st.rhs)
+
     def judge(text: str, prev: Statement | None) -> _Judged:
+        sub = _split_diff(text, str(var))
+        if sub is not None:
+            name, body = sub
+            base = defs.get(name)
+            val = _expr_value(parse_statement(body))
+            if base is None or val is None:
+                return _Judged(StepCheck("unknown"))
+            want = sp.diff(base, var)
+            if exprs_equal(want, val) is True:
+                return _Judged(StepCheck("valid"))
+            return _Judged(StepCheck(
+                "invalid", f"d{name} should be ({want}) d{var}, not ({val}) d{var}",
+                f"Differentiate your {name} again: this d{name} doesn't match it."))
         cur = parse_statement(text)
+        if (cur.kind == "eq" and isinstance(cur.lhs, sp.Symbol) and str(cur.lhs) in defs
+                and defs[str(cur.lhs)] == cur.rhs):
+            return _Judged(StepCheck("valid"))  # choosing parts is true by definition
         val = _expr_value(cur)
         if val is None:
             return _Judged(StepCheck("unknown"), cur)
