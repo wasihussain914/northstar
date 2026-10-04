@@ -283,8 +283,9 @@ async def check(req: CheckRequest) -> dict:
                             for l in lines if l["kind"] != "question" and l["latex"])
         try:
             answer = await (fake_tutor if FAKE_VISION else tutor).ask(
-                req.problem, asked["latex"], None, req.transcript, context, req.lang)
-            board_question = {"line": asked["line"], "question": asked["latex"], "answer": answer["answer"]}
+                req.problem, asked["latex"], None, req.transcript, context, req.lang, want_ink=True)
+            board_question = {"line": asked["line"], "question": asked["latex"],
+                              "answer": answer["answer"], "ink": answer.get("ink", "")}
         except tutor.TutorError:
             board_question = None
 

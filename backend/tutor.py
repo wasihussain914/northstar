@@ -34,8 +34,9 @@ MODEL = os.environ.get("NORTHSTAR_MODEL", "claude-sonnet-5-5")
 # Flash is the live-feedback counterpart to Sonnet: vision plus structured JSON,
 # without a long thinking pass.
 GEMINI_MODEL = "gemini-3.8-flash"
-# Grok 4 is xAI's multimodal flagship: vision plus strict structured JSON.
-XAI_MODEL = "grok-4"
+# Non-reasoning Grok still reads the photo. SymPy checks the math, so the
+# thinking pass only adds latency on a live board.
+XAI_MODEL = "grok-4.20-non-reasoning"
 
 _client: anthropic.AsyncAnthropic | None = None
 _gemini: genai.Client | None = None
@@ -593,16 +594,32 @@ write math in words a person would say ("two x minus six equals ten"), with no L
 Speak like a person: contractions, natural rhythm, warm and brief."""
 
 
+ASK_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "answer": _str("The spoken answer, at most three short sentences, math in words"),
+        "ink": _str("A red margin note of at most five words a teacher would jot next to the question: "
+                    "the key move, never the final answer"),
+    },
+    "required": ["answer", "ink"],
+    "additionalProperties": False,
+}
+
+
 async def ask(problem: str, question: str, image_png_b64: str | None, transcript: dict[int, str] | None,
-              context: str, lang: str = "en") -> dict:
+              context: str, lang: str = "en", want_ink: bool = False) -> dict:
     content: list[dict] = []
     if image_png_b64:
         content.append({"type": "image", "source": {"type": "base64", "media_type": "image/png",
                                                     "data": image_png_b64}})
+    ink_note = ("\nAlso write ink: a red margin note of at most five words a teacher would jot next to the "
+                "question — the key move, never the final answer.") if want_ink else ""
     content.append({"type": "text", "text": (
-        f"{ASK_INSTRUCTIONS}{lang_note(lang)}\n\nProblem: {problem or '(not given)'}\n"
+        f"{ASK_INSTRUCTIONS}{lang_note(lang)}{ink_note}\n\nProblem: {problem or '(not given)'}\n"
         f"What the last check found:\n{context or '(no check yet)'}\n\n"
         f"Student's question: {question}")})
+    if want_ink:
+        return await _structured(content, ASK_SCHEMA, max_tokens=4000)
     if using_grok():
         return {"answer": (await _grok_chat(content, None, 4000)).strip()}
     if using_gemini():

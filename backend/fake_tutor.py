@@ -128,5 +128,8 @@ async def explain_line(problem: str, lines: list[dict], line: int, detail: str, 
 
 
 async def ask(problem: str, question: str, image_png_b64: str | None, transcript: dict[int, str] | None,
-              context: str, lang: str = "en") -> dict:
-    return {"answer": f"(fake mode) You asked: {question}. Try comparing each line with the one above it."}
+              context: str, lang: str = "en", want_ink: bool = False) -> dict:
+    out = {"answer": f"(fake mode) You asked: {question}. Try comparing each line with the one above it."}
+    if want_ink:
+        out["ink"] = "compare with above"
+    return out

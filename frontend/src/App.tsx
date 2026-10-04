@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { health } from "./api";
+import { checkBoard, health } from "./api";
 import { Board, type TeacherInk, type Tool } from "./board/Board";
-import { LINES, inkImage, lineOf, type Stroke } from "./board/geometry";
+import { LINES, inkImage, lineOf, snapshot, type Stroke } from "./board/geometry";
 import { HomeworkSheet } from "./HomeworkSheet";
 import { sameProblem, useHomework, type HomeworkStep } from "./homework";
 // Font-rasterised handwriting: still the working path for typed steps, the
 // demo, and the dev helper until the vector glyph renderer can emit strokes.
-import { textToStrokes } from "./board/handwriting";
+import { textToStrokes, typedTranscript } from "./board/handwriting";
 import { AskCard } from "./AskCard";
 import { DEMOS, runDemo } from "./demo";
 import { DestinationCard } from "./DestinationCard";
 import { RecalcBanner, Starburst } from "./Flashes";
+import { FloatingMic } from "./FloatingMic";
 import { PlanCard } from "./PlanCard";
 import { ProblemScanner, type ScannedProblem } from "./ProblemScanner";
 import { RoutePanel } from "./RoutePanel";
-import { TypeBar } from "./TypeBar";
+import { TypeBar, type TryVerdict } from "./TypeBar";
 import { UntangledMark } from "./Logo";
 import { LANGUAGES, PHRASES, speechLocale, type Lang } from "./i18n";
 import { Mascot, type PipMood } from "./Mascot";
@@ -22,10 +23,10 @@ import { useTrip } from "./useTrip";
 import { useTutor } from "./useTutor";
 import { loadDataset } from "./glyphs/lib/loadDataset";
 import type { GlyphLibrary } from "./glyphs/types/handwriting";
-import { prefetchSpeech, setServerTts, setSpeechLang, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
+import { prefetchSpeech, setServerTts, setSpeechLang, speak, speechSupported, stopSpeaking, unlockSpeech } from "./voice";
 
 const PRESETS = [
-  "Solve 2(x − 3) + 4 = 10",
+  "Solve x² = 5x",
   "Prove: the distance of a linear code C equals the minimum weight of its nonzero codewords",
   "Differentiate x³ − 3x² + 2x",
   "Solve 3(x + 2) − 5 = 2x + 9",
@@ -198,6 +199,20 @@ export default function App() {
     });
   }, [strokes, tutor.lineKeys]);
 
+  // The tutor writes back: a red margin note beside a question inked on the board.
+  const inkedQuestion = useRef("");
+  useEffect(() => {
+    const q = tutor.result?.board_question;
+    if (!q?.ink) return;
+    const sig = tutor.lineKeys.get(q.line) ?? "";
+    if (!sig) return; // scratchpad questions have no line on the paper
+    const key = `${q.line}|${sig}`;
+    if (inkedQuestion.current === key) return;
+    inkedQuestion.current = key;
+    inkAnchor.current = sig;
+    setTeacherInk({ phrase: q.ink, line: q.line });
+  }, [tutor.result, tutor.lineKeys]);
+
   const handleHint = (inkPhrase?: string, inkLine?: number) => {
     countHint();
     if (inkPhrase && inkLine != null) {
@@ -348,13 +363,53 @@ export default function App() {
   const usedLines = new Set(strokes.map(lineOf));
   const lastUsed = usedLines.size ? Math.max(...usedLines) : 0;
   const typeTarget = selectedLine ?? (lastUsed < LINES ? lastUsed + 1 : null);
-  const typeStep = (text: string) => {
+  // The scratchpad: check a typed step against the board without writing it.
+  // When it's right, the student writes it on the paper themself.
+  const [tryVerdict, setTryVerdict] = useState<TryVerdict | null>(null);
+  const tryStep = async (text: string) => {
     if (typeTarget == null) return;
     unlockSpeech();
     stopDemo();
-    dispatch({ type: "replaceLine", line: typeTarget, strokes: textToStrokes(text, typeTarget) });
-    setSelectedLine(null);
+    setTryVerdict({ phase: "checking", message: "" });
+    try {
+      const snap = snapshot(strokes);
+      const image = snap?.image ?? blankBoardPng();
+      const tried = [...(snap?.lines ?? []), typeTarget];
+      const transcript = { ...(typedTranscript(strokes) ?? {}), [typeTarget]: text };
+      const res = await checkBoard(problem, image, tried, transcript, lang);
+      // A question typed here ("how do i fix it?") gets answered, out loud.
+      if (res.board_question && res.board_question.line === typeTarget) {
+        setTryVerdict({ phase: "answered", message: res.board_question.answer });
+        if (voiceOn) speak(res.board_question.answer);
+        return;
+      }
+      const line = res.lines.find((l) => l.line === typeTarget);
+      if (line?.status === "ok") {
+        setTryVerdict({
+          phase: "ok",
+          message: line.source === "verified" ? "Proven — write it on the paper." : "Looks right — write it on the paper.",
+        });
+        if (voiceOn) speak("That works. Write it down.");
+      } else if (line?.status === "error") {
+        setTryVerdict({ phase: "error", message: res.hints[0] || line.detail || "That step doesn't follow from the line above." });
+        if (voiceOn) speak(res.spoken_nudge || "Not quite. Take another look.");
+      } else {
+        setTryVerdict({ phase: "error", message: "Couldn't check that — try phrasing it as an equation or a short claim." });
+      }
+    } catch (err) {
+      setTryVerdict({ phase: "error", message: err instanceof Error ? err.message : String(err) });
+    }
   };
+
+  function blankBoardPng(): string {
+    const c = document.createElement("canvas");
+    c.width = 480;
+    c.height = 240;
+    const ctx = c.getContext("2d")!;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, c.width, c.height);
+    return c.toDataURL("image/png");
+  }
 
   // Demo autopilot. Touching the board takes back control.
   const tutorRef = useRef(tutor);
@@ -514,6 +569,7 @@ export default function App() {
           <div className="board-stage">
             <RecalcBanner errorKey={tutor.errorKey} line={tutor.errorLine} />
             <Starburst fireKey={arrived ? problem : ""} />
+            <FloatingMic problem={problem} strokes={strokes} result={tutor.result} voiceOn={voiceOn} lang={lang} />
             <Mascot mood={pipMood(tutor, arrived)} voiceOn={voiceOn} besideDrawer={panelOpen} />
             <Board
               strokes={strokes}
@@ -536,7 +592,7 @@ export default function App() {
             />
           </div>
           {typeBarOpen && (
-            <TypeBar line={typeTarget} replacing={typeTarget != null && usedLines.has(typeTarget)} onSubmit={typeStep} />
+            <TypeBar line={typeTarget} verdict={tryVerdict} onTry={tryStep} />
           )}
         </section>
         <div className={`drawer-backdrop${panelOpen ? " open" : ""}`} onClick={() => setPanelOpen(false)} />

@@ -20,19 +20,19 @@ export interface DemoScript {
 
 export const DEMOS: DemoScript[] = [
   {
-    problem: "Solve 2(x − 3) + 4 = 10",
+    // The lost root: dividing by x looks fine and silently throws away x = 0.
+    // SymPy compares solution sets, so the sin is caught, proven.
+    problem: "Solve x² = 5x",
     steps: [
-      { do: "write", line: 1, text: "2x - 6 + 4 = 10" },
-      { do: "write", line: 2, text: "2x + 2 = 10" }, // the wrong turn: -6 + 4 is -2
-      { do: "write", line: 3, text: "2x = 8" },
+      { do: "write", line: 1, text: "x^2 = 5x" },
+      { do: "write", line: 2, text: "x = 5" }, // divided both sides by x
       { do: "until", what: "error" },
-      { do: "pause", ms: 4500 },
+      { do: "pause", ms: 5000 },
       { do: "erase", line: 2 },
-      { do: "write", line: 2, text: "2x - 2 = 10" },
+      { do: "write", line: 2, text: "x^2 - 5x = 0" },
       { do: "pause", ms: 600 },
-      { do: "erase", line: 3 },
-      { do: "write", line: 3, text: "2x = 12" },
-      { do: "write", line: 4, text: "x = 6" },
+      { do: "write", line: 3, text: "x(x - 5) = 0" },
+      { do: "write", line: 4, text: "x = 0 or x = 5" },
       { do: "until", what: "arrived" },
     ],
   },

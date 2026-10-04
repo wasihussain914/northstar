@@ -86,3 +86,18 @@ def test_unreadable_line_breaks_the_chain_without_crashing():
 def test_rejects_code(bad):
     with pytest.raises(ParseError):
         parse_statement(bad)
+
+
+def test_an_explicit_root_list_is_solved_form_and_can_arrive():
+    out = check_steps("x^2 = 5x", [(1, "x^2 - 5x = 0"), (2, "x*(x - 5) = 0"), (3, "x = 0 or x = 5")], "x")
+    assert all(r["verdict"] == "valid" for r in out["results"].values())
+    assert out["arrived"] is True
+    # A wrong root list neither passes nor arrives.
+    out = check_steps("x^2 = 5x", [(1, "x^2 - 5x = 0"), (2, "x = 0 or x = 4")], "x")
+    assert out["results"][2]["verdict"] == "invalid" and out["arrived"] is False
+
+
+def test_dividing_by_x_loses_the_zero_root():
+    out = check_steps("x^2 = 5x", [(1, "x^2 = 5x"), (2, "x = 5")], "x")
+    assert out["results"][2]["verdict"] == "invalid"
+    assert "loses" in out["results"][2]["detail"]

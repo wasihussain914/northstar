@@ -161,6 +161,9 @@ class Statement:
     lhs: sp.Basic
     rhs: sp.Expr | None = None
     rel: str = "="
+    # Built from an explicit list of roots ("x = 0 or x = 5"): counts as
+    # solved form even though the variable isn't alone on one side.
+    solved: bool = False
 
     @property
     def free(self) -> set[sp.Symbol]:
@@ -282,7 +285,46 @@ def parse_statement(text: str) -> Statement:
             raise ParseError("a matrix can't be part of a relation")
         kind = "eq" if op == "=" else "ineq"
         return Statement(kind, left, right, op)
+    roots = _parse_roots(text)
+    if roots is not None:
+        return roots
     raise ParseError("more than one relation on a line")
+
+
+def _parse_roots(text: str) -> Statement | None:
+    """An explicit list of solutions: 'x = 0 or x = 5', also comma-separated.
+
+    Collapsed into the equation (x - 0)(x - 5) = 0, whose solution set is the
+    answer, and marked solved so the board can arrive on it.
+    """
+    parts = re.split(r"\s+or\s+|,", text)
+    if len(parts) < 2:
+        return None
+    sym = None
+    vals = []
+    for part in parts:
+        part = part.strip()
+        if not part:
+            return None
+        try:
+            stmt = parse_statement(part)
+        except ParseError:
+            return None
+        if stmt.kind != "eq" or stmt.rhs is None:
+            return None
+        if isinstance(stmt.lhs, sp.Symbol) and not stmt.rhs.free_symbols:
+            s, v = stmt.lhs, stmt.rhs
+        elif isinstance(stmt.rhs, sp.Symbol) and not stmt.lhs.free_symbols:
+            s, v = stmt.rhs, stmt.lhs
+        else:
+            return None
+        if sym is None:
+            sym = s
+        elif s != sym:
+            return None
+        vals.append(v)
+    product = sp.Mul(*[(sym - v) for v in vals])
+    return Statement("eq", product, sp.Integer(0), "=", solved=True)
 
 
 # --------------------------------------------------------------------------
@@ -511,7 +553,9 @@ def compare(prev: Statement, cur: Statement, target: sp.Symbol | None = None) ->
 
 
 def is_solved_form(stmt: Statement, target: sp.Symbol) -> bool:
-    """'x = 4', '4 = x', 'x > 3': the target variable alone on one side."""
+    """'x = 4', '4 = x', 'x > 3', or an explicit root list ('x = 0 or x = 5')."""
+    if stmt.solved:
+        return target in getattr(stmt.lhs, "free_symbols", set())
     if stmt.kind == "expr" or stmt.rhs is None:
         return False
     if stmt.lhs == target and target not in stmt.rhs.free_symbols:
