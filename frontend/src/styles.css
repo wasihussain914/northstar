@@ -2017,3 +2017,429 @@ canvas.ink.tool-eraser {
   align-items: center;
   cursor: pointer;
 }
+
+/* ---------- Pip, the co-pilot ---------- */
+
+.pip {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  z-index: 7;
+  width: 128px;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none; /* only the figure and buttons take taps, never the paper around them */
+}
+
+.pip-figure {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pip-figure svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  /* the paper-cutout look: a hard little shadow under every piece */
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.16)) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.12));
+}
+
+.pip svg g,
+.pip svg path,
+.pip svg ellipse,
+.pip svg circle,
+.pip svg text {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.pip-body {
+  transform-box: view-box !important;
+  transform-origin: 80px 190px !important;
+  animation: pip-bob 3.2s ease-in-out infinite;
+}
+
+.pip-head {
+  transform-box: view-box !important;
+  transform-origin: 80px 135px !important;
+  transition: transform 0.35s cubic-bezier(0.3, 1.4, 0.6, 1);
+}
+
+.pip-arm-l {
+  transform-box: view-box !important;
+  transform-origin: 45px 150px !important;
+  transition: transform 0.35s cubic-bezier(0.3, 1.4, 0.6, 1);
+}
+
+.pip-arm-r {
+  transform-box: view-box !important;
+  transform-origin: 115px 150px !important;
+  transition: transform 0.35s cubic-bezier(0.3, 1.4, 0.6, 1);
+}
+
+.pip-eyes {
+  animation: pip-blink 4.8s infinite;
+}
+
+.pip-look {
+  transition: transform 0.3s ease;
+}
+
+.pip-brow {
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.25s ease;
+}
+
+.pip-cheek {
+  opacity: 0.55;
+  transition: opacity 0.3s ease;
+}
+
+.pip-m,
+.pip-dizzy,
+.pip-think,
+.pip-q {
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.pip-m-smile {
+  opacity: 1;
+}
+
+/* Talking: the mouth flaps while the GPS voice speaks. */
+.pip.talking .pip-m {
+  opacity: 0;
+}
+
+.pip.talking .pip-m-open {
+  opacity: 1; /* shaped frame by frame by the lip-sync in Mascot.tsx */
+}
+
+/* Moods */
+.pip.mood-happy .pip-cheek {
+  opacity: 0.9;
+}
+
+/* Watching you write: eyes down toward the board. */
+.pip.mood-watching .pip-look {
+  transform: translate(-3px, 3px);
+}
+
+.pip.mood-thinking .pip-look {
+  transform: translate(3px, -4px);
+}
+
+.pip.mood-thinking .pip-brow {
+  opacity: 1;
+  transform: translateY(-3px);
+}
+
+.pip.mood-thinking:not(.talking) .pip-m-smile {
+  opacity: 0;
+}
+
+.pip.mood-thinking:not(.talking) .pip-m-o {
+  opacity: 1;
+}
+
+.pip.mood-thinking .pip-think {
+  opacity: 1;
+}
+
+.pip.mood-thinking .pip-think circle {
+  animation: pip-dots 1.2s ease-in-out infinite;
+}
+
+.pip.mood-thinking .pip-think circle:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.pip.mood-thinking .pip-think circle:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.pip.mood-worried .pip-brow {
+  opacity: 1;
+}
+
+.pip.mood-worried .pip-brow-l {
+  transform: rotate(-16deg) translateY(-2px);
+}
+
+.pip.mood-worried .pip-brow-r {
+  transform: rotate(16deg) translateY(-2px);
+}
+
+.pip.mood-worried:not(.talking) .pip-m-smile {
+  opacity: 0;
+}
+
+.pip.mood-worried:not(.talking) .pip-m-worry {
+  opacity: 1;
+}
+
+.pip.mood-worried .pip-head {
+  transform: rotate(-7deg);
+}
+
+/* an "uh-oh" shrug */
+.pip.mood-worried .pip-arm-l {
+  transform: rotate(28deg);
+}
+
+.pip.mood-worried .pip-arm-r {
+  transform: rotate(-28deg);
+}
+
+/* One-shot moves go on the figure, a separate layer, so the idle bob on
+   .pip-body never restarts (and never jumps) when the mood changes. */
+.pip.mood-worried .pip-figure {
+  animation: pip-shake 0.5s ease-in-out;
+}
+
+.pip.mood-worried .pip-q {
+  opacity: 1;
+  animation: pip-pop 0.4s cubic-bezier(0.3, 1.6, 0.6, 1);
+}
+
+.pip.mood-party .pip-figure {
+  transform-origin: 50% 100%;
+  animation: pip-jump 0.55s ease-out 4;
+}
+
+.pip.mood-party .pip-arm-l {
+  transform: rotate(150deg);
+}
+
+.pip.mood-party .pip-arm-r {
+  transform: rotate(-150deg);
+}
+
+.pip.mood-party .pip-cheek {
+  opacity: 1;
+}
+
+.pip.mood-party:not(.talking) .pip-m-smile {
+  opacity: 0;
+}
+
+.pip.mood-party:not(.talking) .pip-m-open {
+  opacity: 1;
+}
+
+.pip.mood-dizzy .pip-eyes {
+  opacity: 0;
+}
+
+.pip.mood-dizzy .pip-dizzy {
+  opacity: 1;
+}
+
+.pip.mood-dizzy .pip-dizzy path {
+  animation: pip-spin 1.4s linear infinite;
+}
+
+/* Speech bubble: captions of whatever Pip says */
+.pip-bubble {
+  position: absolute;
+  right: 62%;
+  bottom: calc(100% + 4px);
+  width: max-content;
+  max-width: min(260px, 70vw);
+  background: #fff;
+  color: #1b1f2a;
+  border-radius: 16px 16px 4px 16px;
+  padding: 9px 13px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12), 0 10px 24px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  transform: translateY(6px) scale(0.92);
+  transform-origin: 100% 100%;
+  transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.3, 1.5, 0.6, 1);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pip-bubble.show {
+  opacity: 1;
+  transform: none;
+}
+
+.pip-hide {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  color: #6b7280;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 1;
+}
+
+.pip:hover .pip-hide,
+.pip-hide:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .pip-hide {
+    opacity: 0.7;
+  }
+}
+
+.pip-tab {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  z-index: 7;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.92);
+  color: #1f3a6b;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pip-tab svg {
+  width: 14px;
+  height: 14px;
+  color: #f5c451;
+}
+
+@media (max-width: 900px) {
+  .pip {
+    width: 104px;
+  }
+}
+
+@media (max-width: 560px) {
+  .pip {
+    width: 72px;
+    right: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pip,
+  .pip * {
+    animation: none !important;
+  }
+}
+
+@keyframes pip-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes pip-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+
+@keyframes pip-dots {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@keyframes pip-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+@keyframes pip-pop {
+  from { transform: scale(0.2); }
+  to { transform: scale(1); }
+}
+
+@keyframes pip-jump {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  15% { transform: translateY(0) scaleY(0.9); }
+  50% { transform: translateY(-22px) scaleY(1.04); }
+}
+
+@keyframes pip-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* When the route drawer slides over the board, Pip hops out to stand just
+   left of it, above the dimmed backdrop, so his reaction to a wrong turn
+   stays visible. (The drawer floats 16px in from the right edge.) On phones
+   the drawer is nearly full-screen, so instead he perches small on its
+   top-left corner, over the brand mark, with his bubble opening rightward. */
+@media (max-width: 699px) {
+  .pip.beside-drawer {
+    position: fixed;
+    top: calc(84px + 8px + env(safe-area-inset-top));
+    left: calc(16px + 12px + env(safe-area-inset-left));
+    right: auto;
+    bottom: auto;
+    width: 52px;
+    z-index: 32;
+    animation: pip-step-aside 0.35s cubic-bezier(0.3, 1.4, 0.6, 1);
+  }
+  .pip.beside-drawer .pip-bubble {
+    left: calc(100% + 6px);
+    right: auto;
+    top: 4px;
+    bottom: auto;
+    max-width: min(240px, calc(100vw - 120px));
+    border-radius: 4px 16px 16px 16px;
+    transform-origin: 0 0;
+  }
+  .pip.beside-drawer .pip-hide {
+    display: none;
+  }
+}
+
+@media (min-width: 700px) {
+  .pip.beside-drawer {
+    position: fixed;
+    right: calc(min(380px, 100vw - 32px) + 16px + 12px + env(safe-area-inset-right));
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    z-index: 32;
+    animation: pip-step-aside 0.35s cubic-bezier(0.3, 1.4, 0.6, 1);
+  }
+}
+
+@keyframes pip-step-aside {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* Karaoke caption: words light up as Pip says them */
+.pip-bubble .ahead {
+  color: #a3a9b5;
+}
+
+.pip-bubble .said {
+  color: inherit;
+  transition: color 0.12s ease;
+}

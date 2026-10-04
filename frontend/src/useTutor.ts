@@ -4,7 +4,7 @@ import type { Marker } from "./board/Board";
 import { lineSignatures, snapshot, type Stroke } from "./board/geometry";
 import { typedTranscript } from "./board/handwriting";
 import { PHRASES, type Lang } from "./i18n";
-import { speak } from "./voice";
+import { caption, speak } from "./voice";
 
 /** How long the pen must rest before we look at the board. */
 const PAUSE_MS = 1200;
@@ -47,8 +47,10 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean, l
 
   const sigsNow = useMemo(() => lineSignatures(strokes), [strokes]);
 
+  // With the voice off, the words still appear as a caption (Pip's speech bubble).
   const say = (text: string) => {
     if (latest.current.voiceOn) speak(text);
+    else caption(text);
   };
 
   const run = useCallback(async () => {

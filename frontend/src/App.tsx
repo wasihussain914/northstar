@@ -2,6 +2,8 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { health } from "./api";
 import { Board, type TeacherInk, type Tool } from "./board/Board";
 import { LINES, lineOf, type Stroke } from "./board/geometry";
+// Font-rasterised handwriting: still the working path for typed steps, the
+// demo, and the dev helper until the vector glyph renderer can emit strokes.
 import { textToStrokes } from "./board/handwriting";
 import { AskCard } from "./AskCard";
 import { DEMOS, runDemo } from "./demo";
@@ -13,6 +15,7 @@ import { RoutePanel } from "./RoutePanel";
 import { TypeBar } from "./TypeBar";
 import { UntangledMark } from "./Logo";
 import { LANGUAGES, speechLocale, type Lang } from "./i18n";
+import { Mascot, type PipMood } from "./Mascot";
 import { useTrip } from "./useTrip";
 import { useTutor } from "./useTutor";
 import { loadDataset } from "./glyphs/lib/loadDataset";
@@ -21,6 +24,7 @@ import { setServerTts, setSpeechLang, speechSupported, stopSpeaking, unlockSpeec
 
 const PRESETS = [
   "Solve 2(x − 3) + 4 = 10",
+  "Prove: the distance of a linear code C equals the minimum weight of its nonzero codewords",
   "Differentiate x³ − 3x² + 2x",
   "Solve 3(x + 2) − 5 = 2x + 9",
   "Solve −2x + 4 > 10",
@@ -450,6 +454,7 @@ export default function App() {
           <div className="board-stage">
             <RecalcBanner errorKey={tutor.errorKey} line={tutor.errorLine} />
             <Starburst fireKey={arrived ? problem : ""} />
+            <Mascot mood={pipMood(tutor, arrived)} voiceOn={voiceOn} besideDrawer={panelOpen} />
             <Board
               strokes={strokes}
               problem={problem}
@@ -565,6 +570,18 @@ function pillTone(tutor: ReturnType<typeof useTutor>, arrived: boolean): PillTon
   if (tutor.errorLine != null) return "off";
   if (arrived) return "arrived";
   if (tutor.result && tutor.phase === "ready") return "on";
+  return "idle";
+}
+
+/** How Pip feels about the route right now. */
+function pipMood(tutor: ReturnType<typeof useTutor>, arrived: boolean): PipMood {
+  if (tutor.phase === "failed") return "dizzy";
+  if (arrived) return "party";
+  if (tutor.errorLine != null) return "worried";
+  if (tutor.phase === "checking") return "thinking";
+  if (tutor.result && tutor.phase === "ready") return "happy";
+  // You're writing: he watches the board instead of blanking out between checks.
+  if (tutor.phase === "watching") return "watching";
   return "idle";
 }
 
