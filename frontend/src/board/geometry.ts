@@ -137,7 +137,18 @@ export function inkImage(strokes: Stroke[]): string | null {
   return render(strokes, lines, false, 1);
 }
 
+/** The handwriting as a canvas at print resolution, for the PDF export. */
+export function inkCanvas(strokes: Stroke[], scale = 2): HTMLCanvasElement | null {
+  if (strokes.length === 0) return null;
+  const lines = [...lineSignatures(strokes).keys()].sort((a, b) => a - b);
+  return renderCanvas(strokes, lines, false, scale);
+}
+
 function render(strokes: Stroke[], lines: number[], labels: boolean, scale: number): string {
+  return renderCanvas(strokes, lines, labels, scale).toDataURL("image/png");
+}
+
+function renderCanvas(strokes: Stroke[], lines: number[], labels: boolean, scale: number): HTMLCanvasElement {
   const first = lines[0], last = lines[lines.length - 1];
   const top = (first - 1) * LINE_H;
   const height = (last - first + 1) * LINE_H;
@@ -183,7 +194,7 @@ function render(strokes: Stroke[], lines: number[], labels: boolean, scale: numb
   for (const s of strokes) ctx.fill(strokePath(s));
   ctx.restore();
 
-  return canvas.toDataURL("image/png");
+  return canvas;
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {

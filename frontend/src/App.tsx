@@ -2,6 +2,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { checkBoard, health } from "./api";
 import { Board, type TeacherInk, type Tool } from "./board/Board";
 import { LINES, inkImage, lineOf, snapshot, type Stroke } from "./board/geometry";
+import { exportBoardPdf } from "./exportPdf";
 import { HomeworkSheet } from "./HomeworkSheet";
 import { sameProblem, useHomework, type HomeworkStep } from "./homework";
 // Font-rasterised handwriting: still the working path for typed steps, the
@@ -476,6 +477,14 @@ export default function App() {
           <span className="pill-divider" />
           <ToolButton onClick={() => dispatch({ type: "clear" })} disabled={!strokes.length} label="Clear board">
             <path d="M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11" />
+          </ToolButton>
+          <span className="pill-divider" />
+          <ToolButton
+            onClick={() => exportBoardPdf({ problem, strokes, student: homework.doc.student, course: homework.doc.course })}
+            disabled={!strokes.length}
+            label="Download this page as a PDF"
+          >
+            <path d="M10 3v10m-4-4l4 4 4-4M4 16h12" />
           </ToolButton>
           <span className="pill-divider" />
           <ToolButton active={typeBarOpen} onClick={() => setTypeBarOpen(!typeBarOpen)} label="Type steps (T)">
