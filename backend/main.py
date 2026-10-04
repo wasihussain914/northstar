@@ -10,6 +10,7 @@ import asyncio
 import base64
 import json
 import os
+import struct
 import time
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import asynccontextmanager
@@ -190,6 +191,44 @@ def decode_png(data: str) -> tuple[str, bytes]:
     return b64, raw
 
 
+def _blank_page_png(width: int = 480, height: int = 240) -> str:
+    """A plain white page, base64. Cached after the first build."""
+    import zlib
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return (struct.pack(">I", len(data)) + kind + data
+                + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF))
+
+    raw = b"".join(b"\x00" + b"\xff" * (3 * width) for _ in range(height))
+    png = (b"\x89PNG\r\n\x1a\n"
+           + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+           + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+    return base64.b64encode(png).decode()
+
+
+_BLANK_PAGE: str | None = None
+
+
+def readable_png(b64: str, raw: bytes) -> str:
+    """The image, unless it's a placeholder too small for a vision model.
+
+    Typed boards upload a 1x1 image to save bandwidth; when a check still
+    needs the model (e.g. proof claims SymPy can't judge), Grok rejects a
+    1-pixel image, so substitute a blank page — the typed transcript carries
+    the content.
+    """
+    global _BLANK_PAGE
+    try:
+        width, height = struct.unpack(">II", raw[16:24])
+    except struct.error:
+        return b64
+    if width >= 16 and height >= 16:
+        return b64
+    if _BLANK_PAGE is None:
+        _BLANK_PAGE = _blank_page_png()
+    return _BLANK_PAGE
+
+
 @app.get("/api/health")
 async def health() -> dict:
     return {"ok": True, "has_key": FAKE_VISION or tutor.has_api_key(),
@@ -251,8 +290,8 @@ async def check(req: CheckRequest) -> dict:
                 merged = {**{n: k.sympy for n, k in known.items()}, **typed}
                 board = await fake_tutor.read_board(req.problem, merged, req.lines, req.lang)
             else:
-                board = await tutor.read_board(req.problem, image, req.lines, typed, req.lang,
-                                               known={n: k.model_dump() for n, k in known.items()})
+                board = await tutor.read_board(req.problem, readable_png(image, raw), req.lines, typed,
+                                               req.lang, known={n: k.model_dump() for n, k in known.items()})
                 model_read = True
                 # Splice in what the model was told not to re-read.
                 got = {l["line"] for l in board.get("lines", [])}
