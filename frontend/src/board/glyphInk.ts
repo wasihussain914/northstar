@@ -120,18 +120,29 @@ function inkFor(text: string, library: GlyphLibrary, x0: number, baseline: numbe
   const slipAt = drawable.length >= 4 && rng() < 0.18 * MESS ? drawable[1 + Math.floor(rng() * (drawable.length - 1))] : null;
 
   let shift = 0; // how far the rest of the line moved right after a slip
+  // "^" doesn't get drawn: the glyph after it writes smaller and raised in
+  // place, like a real superscript (x^2 reads as x²).
+  let supNext = false;
   for (const g of glyphs) {
     if (g.type === "space" || !g.glyph) continue;
+    if (g.label === "^") {
+      supNext = true;
+      continue;
+    }
+    const sup = supNext;
+    supNext = false;
+    if (sup) shift -= fontH * 0.62; // close the skipped caret's gap: the sup hugs its base
     let x = g.placeX + shift + (rng() - 0.5) * 3.5 * MESS;
     const y = g.baseline + drift(x) + (rng() - 0.5) * 4 * MESS;
     if (g.type === "fallback") {
       for (const s of textToStrokes(g.label, line, x, fontH * 1.15, false)) out.push(s);
       continue;
     }
-    const sizeJ = 1 + (rng() - 0.5) * 0.24 * MESS;
+    const sizeJ = (sup ? 0.62 : 1) * (1 + (rng() - 0.5) * 0.24 * MESS);
     const rot = g.rotationRad + (rng() - 0.5) * 0.16 * MESS;
     const H = g.scaledHeight * sizeJ;
-    const { scaled, cy } = placement(g.label, H, y, g.verticalOffset);
+    let { scaled, cy } = placement(g.label, H, y, g.verticalOffset);
+    if (sup) cy -= fontH * 0.48;
 
     if (g === slipAt) {
       // Write a different character first, scratch it out, then carry on
