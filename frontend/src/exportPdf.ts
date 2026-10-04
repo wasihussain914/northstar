@@ -1,11 +1,20 @@
-import { inkCanvas, type Stroke } from "./board/geometry";
+import { inkCanvas, LINE_H, type Stroke } from "./board/geometry";
+import { handwritingCanvas } from "./board/glyphInk";
+import type { GlyphLibrary } from "./glyphs/types/handwriting";
 
 /**
  * Download the page as a PDF: the problem as a heading, then the handwriting
  * on ruled lines, split across US Letter pages if it runs long. Built in the
  * browser, so it works without the server and with nothing filed yet.
  */
-export async function exportBoardPdf(opts: { problem: string; strokes: Stroke[]; student?: string; course?: string }) {
+export async function exportBoardPdf(opts: {
+  problem: string;
+  strokes: Stroke[];
+  student?: string;
+  course?: string;
+  /** When loaded, the heading is written in this handwriting too. */
+  library?: GlyphLibrary | null;
+}) {
   const canvas = inkCanvas(opts.strokes, 2);
   if (!canvas) return;
   // Loaded on demand so the main bundle stays light.
@@ -17,11 +26,19 @@ export async function exportBoardPdf(opts: { problem: string; strokes: Stroke[];
 
   // Heading: the problem, then who and when.
   let y = page.margin;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
-  const title = doc.splitTextToSize(pdfSafe(opts.problem || "Untitled problem"), textW) as string[];
-  doc.text(title, page.margin, y + 12);
-  y += 12 + title.length * 19;
+  const heading = opts.library ? handwritingCanvas(opts.problem || "Untitled problem", opts.library) : null;
+  if (heading) {
+    const scale = Math.min(1, textW / (heading.width / 2));
+    const w = (heading.width / 2) * scale, h = (heading.height / 2) * scale;
+    doc.addImage(heading.toDataURL("image/png"), "PNG", page.margin, y, w, h);
+    y += h + 2;
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    const title = doc.splitTextToSize(pdfSafe(opts.problem || "Untitled problem"), textW) as string[];
+    doc.text(title, page.margin, y + 12);
+    y += 12 + title.length * 19;
+  }
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10.5);
   doc.setTextColor(110);
@@ -47,7 +64,10 @@ export async function exportBoardPdf(opts: { problem: string; strokes: Stroke[];
       y = page.margin;
       continue;
     }
-    const bandPx = Math.min(canvas.height - srcY, Math.floor(roomPt / scale));
+    // Cut between ruled lines, never through one.
+    const linePx = LINE_H * 2; // inkCanvas renders at 2x
+    const fit = Math.floor(roomPt / scale / linePx) * linePx;
+    const bandPx = Math.min(canvas.height - srcY, fit);
     if (bandPx <= 0) {
       doc.addPage();
       y = page.margin;

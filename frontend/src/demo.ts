@@ -89,10 +89,49 @@ export interface DemoHooks {
   eraseLine: (line: number) => void;
   /** Current tutor state, read fresh each poll. */
   state: () => { errorLine: number | null; arrived: boolean; ready: boolean };
+  /** How to turn a line of text into ink (the loaded handwriting, or the font). */
+  strokesFor?: (text: string, line: number) => Stroke[];
 }
 
 const WRITE_MS = 1100; // time to "write" one line
 const UNTIL_TIMEOUT_MS = 30000;
+
+type Sleep = (ms: number) => Promise<void>;
+
+/** Reveal a line left to right in chunks so it looks written. */
+async function writeLine(text: string, line: number, hooks: DemoHooks, sleep: Sleep) {
+  const make = hooks.strokesFor ?? ((t: string, l: number) => textToStrokes(t, l));
+  // Keep the first stroke first: it carries the typed-text tag the server reads.
+  const [first, ...rest] = make(text, line);
+  if (!first) return;
+  const strokes = [first, ...rest.sort((a, b) => a.box.minX - b.box.minX)];
+  const chunks = 14;
+  const per = Math.ceil(strokes.length / chunks);
+  for (let i = 0; i < strokes.length; i += per) {
+    hooks.add(strokes.slice(i, i + per));
+    await sleep(WRITE_MS / chunks);
+  }
+  await sleep(350);
+}
+
+/**
+ * Write several lines one after another, the way the tutor finishes a solve.
+ * Resolves when done; rejects with AbortError if the student takes over.
+ */
+export async function writeLines(lines: { line: number; text: string }[], hooks: Pick<DemoHooks, "add" | "strokesFor">, signal: AbortSignal) {
+  const sleep: Sleep = (ms) =>
+    new Promise<void>((resolve, reject) => {
+      const t = window.setTimeout(resolve, ms);
+      signal.addEventListener("abort", () => {
+        window.clearTimeout(t);
+        reject(new DOMException("aborted", "AbortError"));
+      }, { once: true });
+    });
+  for (const l of lines) {
+    if (signal.aborted) return;
+    await writeLine(l.text, l.line, hooks as DemoHooks, sleep);
+  }
+}
 
 export async function runDemo(script: DemoScript, hooks: DemoHooks, signal: AbortSignal) {
   const sleep = (ms: number) =>
@@ -113,14 +152,7 @@ export async function runDemo(script: DemoScript, hooks: DemoHooks, signal: Abor
     switch (step.do) {
       case "write": {
         // Reveal the line left to right in chunks so it looks written.
-        const strokes = textToStrokes(step.text, step.line).sort((a, b) => a.box.minX - b.box.minX);
-        const chunks = 14;
-        const per = Math.ceil(strokes.length / chunks);
-        for (let i = 0; i < strokes.length; i += per) {
-          hooks.add(strokes.slice(i, i + per));
-          await sleep(WRITE_MS / chunks);
-        }
-        await sleep(350);
+        await writeLine(step.text, step.line, hooks, sleep);
         break;
       }
       case "erase":
