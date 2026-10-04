@@ -726,7 +726,12 @@ line. Write the remaining steps exactly as a student would write them on paper: 
 (no LaTeX, no words of explanation, no line numbers), using the same notation and style as their lines, \
 with ^ for powers and / for fractions. Carry on from their last line without repeating it, and end with the \
 final answer in solved form (e.g. "x = 6", "x = 0 or x = 5"). At most 8 lines. If their last line is wrong, \
-start from the last correct line and continue from there. If nothing is written yet, start from the problem."""
+start from the last correct line and continue from there. If nothing is written yet, start from the problem.
+Every line must be a complete, textbook-clean statement — never a fragment or a trailing "* 2". Write \
+integrals as "int f dx" (the page draws "int" as a real integral sign), and every integral keeps its dx or du. \
+An indefinite integral's final answer ends with + C. For integration by parts write the substitution lines \
+(u = ..., du = ... dx, dv = ... dx, v = ...), then "int ... dx = u*v - int v du" with the actual expressions \
+substituted on the next line, then simplify to the answer."""
 
 
 async def finish_work(problem: str, lines: list[dict], lang: str = "en") -> dict:
