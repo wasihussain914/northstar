@@ -31,6 +31,8 @@ export interface Tutor {
   /** Hints for the current wrong turn are still on their way. */
   hintsLoading: boolean;
   checkNow: () => void;
+  /** Pause checking while a line is being written for the student (autopilot, demo); release checks at once. */
+  hold: (on: boolean) => void;
 }
 
 /** A read line, remembered with where its verdict came from. */
@@ -157,7 +159,7 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean, l
       busy.current = false;
       setInFlight(false);
       const changed = !sameSigs(signatures, lineSignatures(latest.current.strokes));
-      if (again.current || changed) {
+      if (!held.current && (again.current || changed)) {
         again.current = false;
         timer.current = window.setTimeout(run, PAUSE_MS / 2);
       }
@@ -226,11 +228,19 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean, l
     const deepest = Math.max(...sigsNow.keys());
     const advanced = deepest > deepestLine.current && deepestLine.current > 0;
     deepestLine.current = deepest;
+    if (held.current) return; // a line is still being written for the student
     const typed = typedTranscript(strokes);
     const allTyped = !!typed && [...sigsNow.keys()].every((l) => typed[l] != null);
     timer.current = window.setTimeout(run, allTyped ? TYPED_MS : advanced ? CHECKPOINT_MS : PAUSE_MS);
     return () => window.clearTimeout(timer.current);
   }, [strokes, problem, run, sigsNow]);
+
+  const held = useRef(false);
+  const hold = useCallback((on: boolean) => {
+    held.current = on;
+    window.clearTimeout(timer.current);
+    if (!on) timer.current = window.setTimeout(run, TYPED_MS);
+  }, [run]);
 
   useEffect(() => {
     voice.current.arrived = false;
@@ -305,7 +315,7 @@ export function useTutor(strokes: Stroke[], problem: string, voiceOn: boolean, l
     : upToDate ? "ready"
     : "watching";
 
-  return { phase, result: withHints, errorLine, errorKey, markers, lineKeys: sigsNow, failure, hintsLoading, checkNow: run };
+  return { phase, result: withHints, errorLine, errorKey, markers, lineKeys: sigsNow, failure, hintsLoading, checkNow: run, hold };
 }
 
 function sameSigs(a: Map<number, string>, b: Map<number, string>): boolean {
