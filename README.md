@@ -214,3 +214,7 @@ your handwriting
    💡 hint ladder
 
 **A GPS for solving math. You do the driving.**
+
+## 🎥 Demo
+
+[▶️ Watch the Untangled Demo on YouTube](https://youtu.be/56DcrK1BDGQ)
