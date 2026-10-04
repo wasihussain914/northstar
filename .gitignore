@@ -7,3 +7,5 @@ __pycache__/
 backend/debug/
 .DS_Store
 .claude/
+*.tsbuildinfo
+backend/tts_cache/

@@ -1,4 +1,4 @@
-from main import merge
+from main import SKIP_KINDS, merge
 
 
 def line(n, sympy, kind="equation", ai="ok"):
@@ -33,6 +33,56 @@ def test_student_facing_notes_never_contain_the_answer():
     assert note and "6" not in note and "4" not in note
 
 
+def test_reference_formulas_are_not_wrong_turns():
+    board = {"lines": [
+        line(1, "x = (-b + sqrt(b^2 - 4*a*c))/(2*a)", kind="formula", ai="ok"),
+        line(2, "x = p*sin(f)*cos(t)", kind="formula", ai="unclear"),
+        line(3, "x = (-b + sqrt(b^2 + 4*a*c))/(2*a)", kind="formula", ai="error"),
+    ]}
+    out = {l["line"]: l["status"] for l in merge(board, None)}
+    assert out == {1: "skip", 2: "skip", 3: "error"}
+
+
+def test_steps_chain_past_a_formula_line():
+    from verify import check_steps
+    board = [line(1, "x = (-b + sqrt(b^2 - 4*a*c))/(2*a)", kind="formula"), line(2, "(x - 2)*(x - 3) = 0")]
+    steps = [(l["line"], l["sympy"]) for l in board if l["kind"] not in SKIP_KINDS]
+    out = check_steps("x^2 - 5*x + 6 = 0", steps, "x")
+    assert list(out["results"]) == [2]
+    assert out["results"][2]["verdict"] == "valid"
+
+
 def test_without_sympy_uses_claude_verdicts():
     board = {"lines": [line(1, "x = 2", ai="error")]}
     assert merge(board, None)[0]["status"] == "error"
+
+
+<<<<<<< HEAD
+def test_intermediate_work_ignores_adjacent_mismatch_but_keeps_actual_errors():
+    board = {"lines": [
+        line(1, "y(x) = C1*exp(2*x)", kind="intermediate"),
+        line(2, "C1 = 3", kind="intermediate", ai="unclear"),
+        line(3, "y(x) = C1*exp(3*x)", kind="intermediate", ai="error"),
+    ]}
+    sym = {"results": {1: {"verdict": "invalid", "detail": "adjacent mismatch", "note": ""}}}
+    assert [(l["status"], l["source"]) for l in merge(board, sym)] == [
+        ("skip", "ai"), ("skip", "ai"), ("error", "ai"),
+    ]
+=======
+def test_claim_lines_are_judged_by_the_model_not_skipped():
+    # Proof steps written in words ("since C is linear, v + w is in C") are
+    # claims: no sympy, but still judged, never silently skipped.
+    from tutor import BOARD_SCHEMA, SYSTEM
+    assert "claim" in BOARD_SCHEMA["properties"]["lines"]["items"]["properties"]["kind"]["enum"]
+    assert "never not_math" in SYSTEM
+    board = {"lines": [line(1, "", kind="claim", ai="ok"), line(2, "", kind="claim", ai="error")]}
+    out = {l["line"]: l["status"] for l in merge(board, None)}
+    assert out == {1: "ok", 2: "error"}
+
+
+def test_questions_written_on_the_board_are_skipped_not_judged():
+    from main import SKIP_KINDS
+    assert "question" in SKIP_KINDS
+    board = {"lines": [line(1, "", kind="question", ai="unclear")]}
+    assert merge(board, None)[0]["status"] == "skip"
+>>>>>>> origin/main

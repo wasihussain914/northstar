@@ -16,12 +16,31 @@ interface Props {
   onSelectLine: (line: number) => void;
   voiceOn: boolean;
   trip: Trip;
-  onHint: () => void;
+  /** Last ruled line that currently has student ink. */
+  lastInkLine: number | null;
+  /** Called when the student requests a hint. Passes the ink phrase and target
+   *  line so the board can animate a teacher-pen annotation. */
+  onHint: (inkPhrase?: string, inkLine?: number) => void;
+  /** Third hint: erase the wrong line and write the corrected step in black. */
+  onShowFix: (line: number, fixLine: string) => void;
   onNewTrip: () => void;
+  /** Button label on the trip summary ("New problem", "Next stop · 2 of 4"). */
+  nextLabel?: string;
+  /** Detour-practice card, shown with the trip summary. */
+  practiceCard?: React.ReactNode;
+  /** Where the solution went (the homework doc), shown on the trip summary. */
+  docNote?: React.ReactNode;
+  /** Write the rest of the solution on the board, in the loaded handwriting. */
+  onFinish?: () => void;
+  finishing?: boolean;
   children?: React.ReactNode;
 }
 
-export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, onHint, onNewTrip, children }: Props) {
+<<<<<<< HEAD
+export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, lastInkLine, onHint, onShowFix, onNewTrip, nextLabel, practiceCard, children }: Props) {
+=======
+export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, lastInkLine, onHint, onNewTrip, nextLabel, practiceCard, docNote, onFinish, finishing, children }: Props) {
+>>>>>>> origin/main
   const { result, errorLine, errorKey, phase, failure } = tutor;
   const [hintsShown, setHintsShown] = useState(0);
   const [showNext, setShowNext] = useState(false);
@@ -32,9 +51,19 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
   const reveal = () => {
     const next = Math.min(hintsShown + 1, result?.hints.length ?? 0);
     setHintsShown(next);
-    onHint();
-    const text = result?.hints[next - 1];
-    if (voiceOn && text) speak(text);
+    const hintIndex = next - 1;
+    const hintText = result?.hints[hintIndex];
+    if (hintIndex === 2 && errorLine != null) {
+      onShowFix(errorLine, result?.fix_line ?? "");
+    } else {
+      // Use the server's short margin note, or fall back to the first four words
+      // of the hint text so the pen always has something to write.
+      const inkPhrase =
+        result?.hint_ink?.[hintIndex] ||
+        (hintText ? hintText.split(" ").slice(0, 4).join(" ") : undefined);
+      onHint(inkPhrase, errorLine ?? undefined);
+    }
+    if (voiceOn && hintText) speak(hintText);
   };
 
   return (
@@ -48,9 +77,10 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
         onRetry={tutor.checkNow}
       />
 
-      {trip.durationMs != null && <TripSummary trip={trip} onNewTrip={onNewTrip} />}
+      {trip.durationMs != null && <TripSummary trip={trip} onNewTrip={onNewTrip} nextLabel={nextLabel ?? "New problem"} docNote={docNote} />}
+      {trip.durationMs != null && practiceCard}
 
-      {errorLine != null && result && result.hints.length > 0 && (
+      {errorLine != null && result && (result.hints.length > 0 || tutor.hintsLoading) && (
         <section className="card hint-card">
           <header>
             <span className="eyebrow amber">Recalculating</span>
@@ -64,11 +94,40 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
               </li>
             ))}
           </ol>
-          {hintsShown < result.hints.length && (
+          {hintsShown < result.hints.length ? (
             <button className="btn primary" onClick={reveal}>
               {hintsShown === 0 ? "Give me a hint" : HINT_LABELS[hintsShown]}
             </button>
-          )}
+          ) : tutor.hintsLoading ? (
+            <button className="btn primary" disabled>
+              Thinking of a hint…
+            </button>
+          ) : null}
+        </section>
+      )}
+
+      {onFinish && errorLine == null && !result?.arrived && (
+        <section className="card finish-card">
+          <span className="eyebrow">Autopilot</span>
+          <p className="next-hint">Written in your handwriting, straight onto the page. It still gets checked line by line.</p>
+          <button className="btn wide" onClick={onFinish} disabled={finishing}>
+            {finishing ? "Writing…" : phase === "empty" ? "Autofill the solution" : "Finish the rest for me"}
+          </button>
+        </section>
+      )}
+
+      {result?.board_question && (
+        <section className="card asked-card">
+          <span className="eyebrow">You wrote</span>
+          <p className="asked-q">“{result.board_question.question}”</p>
+          <p className="asked-a">{result.board_question.answer}</p>
+        </section>
+      )}
+
+      {phase === "empty" && errorLine == null && (
+        <section className="card">
+          <span className="eyebrow">Next turn</span>
+          <p className="next-hint">Start on line 1. Write the first step under the question.</p>
         </section>
       )}
 
@@ -84,8 +143,13 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
               className="btn ghost wide"
               onClick={() => {
                 setShowNext(true);
-                onHint();
-                if (voiceOn) speak(result.next_step_hint);
+                const nextHintText = result.next_step_hint;
+                // Ink phrase: server-provided short note or first four words of text.
+                const inkPhrase =
+                  result.next_step_ink ||
+                  (nextHintText ? nextHintText.split(" ").slice(0, 4).join(" ") : undefined);
+                onHint(inkPhrase, lastInkLine ?? undefined);
+                if (voiceOn) speak(nextHintText);
               }}
             >
               Stuck? Where do I go next?
@@ -108,7 +172,7 @@ export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn
   );
 }
 
-function TripSummary({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
+function TripSummary({ trip, onNewTrip, nextLabel, docNote }: { trip: Trip; onNewTrip: () => void; nextLabel: string; docNote?: React.ReactNode }) {
   const secs = Math.round((trip.durationMs ?? 0) / 1000);
   const time = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`;
   const recap =
@@ -137,8 +201,9 @@ function TripSummary({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void })
           <dd>{time}</dd>
         </div>
       </dl>
+      {docNote}
       <button className="btn primary wide" onClick={onNewTrip}>
-        New problem
+        {nextLabel}
       </button>
     </section>
   );
@@ -158,49 +223,61 @@ function Status({ phase, result, errorLine, failure, wrongTurns, onRetry }: {
 
   if (phase === "failed") {
     tone = "fail";
-    title = "Lost signal";
-    body = failure ?? "Something went wrong.";
+    title = "Couldn't check that";
+    body = plainFailure(failure);
   } else if (phase === "checking") {
     tone = "busy";
-    title = "Checking your route…";
-    body = result?.on_track_message || "Reading your work.";
+    title = "Checking your work…";
+    body = result?.on_track_message || "Reading what you wrote.";
   } else if (phase === "watching") {
     tone = "busy";
-    title = "Watching";
-    body = "I'll check as soon as you pause.";
+    title = "Keep going";
+    body = "I'll check it once you stop writing.";
   } else if (result && errorLine != null) {
     tone = "off";
-    title = "Off route";
+    title = `Take another look at line ${errorLine}`;
     const later = result.lines.some((l) => l.line > errorLine && l.status !== "skip");
     body = later
       ? `Line ${errorLine} doesn't follow from the line above it, and the lines after it build on that.`
       : `Line ${errorLine} doesn't follow from the line above it.`;
   } else if (result?.arrived) {
     tone = "arrived";
-    title = "You've arrived";
+    title = "You solved it";
     body = wrongTurns > 0
-      ? "You found your way back after a wrong turn. That's exactly how it's supposed to work."
-      : "Clean route, no wrong turns.";
+      ? "You caught your own mistake and fixed it. That's the whole point."
+      : "Every step checked out.";
   } else if (result) {
     tone = "on";
-    title = "On route";
+    title = "Looks right so far";
     body = result.on_track_message || "Every step so far checks out.";
   }
 
   return (
     <section className={`status tone-${tone}`}>
-      <div className="status-dot" />
-      <div>
-        <h2>{title}</h2>
-        <p>{body}</p>
-        {phase === "failed" && (
-          <button className="btn small" onClick={onRetry}>
-            Try again
-          </button>
-        )}
-      </div>
+      <h2>
+        <span className="status-dot" />
+        {title}
+      </h2>
+      <p>{body}</p>
+      {phase === "failed" && (
+        <button className="btn small retry" onClick={onRetry}>
+          Try again
+        </button>
+      )}
     </section>
   );
+}
+
+/** Turn a raw error into something a student can act on. */
+function plainFailure(failure: string | null): string {
+  const f = (failure ?? "").toLowerCase();
+  if (!f) return "Something went wrong on our end. Try again in a moment.";
+  if (f.includes("fetch") || f.includes("network") || f.includes("load failed")) {
+    return "Can't reach the checker right now. Make sure it's running, then try again.";
+  }
+  if (f.includes("key")) return "The checker isn't set up with an API key yet.";
+  if (f.includes("timeout") || f.includes("timed out")) return "That took too long. Try again.";
+  return "Something went wrong on our end. Try again in a moment.";
 }
 
 function Route({ result, problem, errorLine, selectedLine, onSelectLine }: {
@@ -233,7 +310,7 @@ function Route({ result, problem, errorLine, selectedLine, onSelectLine }: {
       </div>
       <ol className="route-list">
         <li className="route-node start">
-          <span className="node-icon star" aria-hidden="true">✦</span>
+          <span className="node-icon star" aria-hidden="true" />
           <div className="node-body">
             <span className="node-label">Start</span>
             <span className="node-text">{problem || "Problem from the board"}</span>
