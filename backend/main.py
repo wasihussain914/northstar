@@ -125,11 +125,6 @@ class CheckRequest(BaseModel):
     known_problem: "KnownProblem | None" = None
 
 
-<<<<<<< HEAD
-# Reference and independent intermediate work are judged in context by the AI,
-# rather than compared for equivalence with adjacent steps by SymPy.
-SKIP_KINDS = {"crossed_out", "not_math", "formula", "intermediate"}
-=======
 class KnownLine(BaseModel):
     latex: str = Field(default="", max_length=2000)
     sympy: str = Field(default="", max_length=2000)
@@ -154,8 +149,10 @@ class HintsRequest(BaseModel):
     lang: str = Field(default="en", max_length=8)
 
 
-SKIP_KINDS = {"crossed_out", "not_math", "question"}
->>>>>>> origin/main
+# Questions are answered, not judged; reference formulas and independent
+# intermediate work are judged in context by the AI rather than compared
+# for equivalence with adjacent steps by SymPy.
+SKIP_KINDS = {"crossed_out", "not_math", "question", "formula", "intermediate"}
 
 
 def merge(board: dict, sym: dict | None) -> list[dict]:
@@ -269,12 +266,6 @@ async def check(req: CheckRequest) -> dict:
     unread = [n for n in req.lines if n not in typed and n not in known]
     model_read = False
 
-<<<<<<< HEAD
-    # Exact typed text can skip the model only when every line is valid.
-    # Other verdicts need context: an apparent mismatch may be independent work.
-    if not FAKE_VISION and req.transcript and req.lines and all(n in req.transcript for n in req.lines):
-        candidate = fake_tutor.transcript_board(req.problem, req.transcript, req.lines)
-=======
     # Fast path: every line is already text (typed, or read on an earlier
     # check), so a model read adds nothing. SymPy alone turns a check into
     # milliseconds; if it can't decide a single line, fall through to the
@@ -291,7 +282,6 @@ async def check(req: CheckRequest) -> dict:
             candidate["problem_sympy"] = req.known_problem.problem_sympy
             candidate["target_variable"] = req.known_problem.target_variable
             candidate["task"] = req.known_problem.task
->>>>>>> origin/main
         verdict_check = await sympy_pool.check(candidate.get("problem_sympy", ""), line_steps(candidate),
                                                candidate.get("target_variable", ""), candidate.get("task") or "")
         if (verdict_check and verdict_check["results"]
@@ -325,28 +315,10 @@ async def check(req: CheckRequest) -> dict:
     lines = merge(board, sym)
 
     first_error = next((l["line"] for l in lines if l["status"] == "error"), None)
-<<<<<<< HEAD
+    # Hints (and fix_line) are fetched by the client in a separate call
+    # (POST /api/hints), so the check — and the "recalculating" voice —
+    # never wait on them.
     hints, hint_ink, spoken, fix_line = [], [], "", ""
-    if first_error is not None:
-        # Hints are a second, text-only call, made only when there is a wrong
-        # turn — the common no-error check pays for transcription alone.
-        flagged = next(l for l in lines if l["line"] == first_error)
-        try:
-            explained = await (fake_tutor if FAKE_VISION else tutor).explain_line(
-                req.problem, lines, first_error, flagged["_detail"], flagged["detail"], req.lang)
-            hints, spoken = explained["hints"], explained["spoken_nudge"]
-            hint_ink = explained.get("hint_ink", [])
-            fix_line = explained.get("fix_line", "")
-        except tutor.TutorError:
-            hints = [f"Take another look at line {first_error}. Does it really follow from the line above?",
-                     flagged["detail"] or "Compare it carefully with the previous line.", ""]
-            spoken = f"Recalculating. Take another look at line {first_error}."
-            hint_ink = ["compare with above", "check each term", ""]
-            fix_line = ""
-=======
-    # Hints are fetched by the client in a separate call (POST /api/hints),
-    # so the check — and the "recalculating" voice — never wait on them.
-    hints, hint_ink, spoken = [], [], ""
 
     # A question written on the board ("what do i do?") gets answered out
     # loud, once: the client lists lines it already heard answers for.
@@ -363,7 +335,6 @@ async def check(req: CheckRequest) -> dict:
                               "answer": answer["answer"], "ink": answer.get("ink", "")}
         except tutor.TutorError:
             board_question = None
->>>>>>> origin/main
 
     has_work = any(l["status"] not in ("skip", "pending") for l in lines)
     sym_results = (sym or {}).get("results", {})
@@ -386,12 +357,11 @@ async def check(req: CheckRequest) -> dict:
         "next_step_hint": "" if first_error or arrived else board.get("next_step_hint", ""),
         "next_step_ink": "" if first_error or arrived else board.get("next_step_ink", ""),
         "on_track_message": board.get("on_track_message", ""),
-<<<<<<< HEAD
-        "eta_steps": 0 if arrived else max(1, int(board.get("eta_steps", 1))),
-=======
-        # -1: no fresh estimate this round (nothing was read); keep the last one.
-        "eta_steps": 0 if arrived else max(-1, int(board.get("eta_steps", 0))),
->>>>>>> origin/main
+        # -1: no fresh estimate this round (nothing was read); keep the last
+        # one. A fresh read that hasn't arrived is always at least 1 step out.
+        "eta_steps": (0 if arrived
+                      else max(1, int(board.get("eta_steps", 1))) if model_read or FAKE_VISION
+                      else -1),
         "route_note": board.get("route_note", ""),
         "arrived": arrived,
         "verified": sym is not None,
@@ -438,13 +408,15 @@ async def hints(req: HintsRequest) -> dict:
             req.problem, lines, req.first_error, flagged["_detail"], flagged["detail"], req.lang)
         hints, spoken = explained["hints"], explained["spoken_nudge"]
         hint_ink = explained.get("hint_ink", [])
+        fix_line = explained.get("fix_line", "")
     except tutor.TutorError:
         hints = [f"Take another look at line {req.first_error}. Does it really follow from the line above?",
                  flagged["detail"] or "Compare it carefully with the previous line.", ""]
         spoken = f"Recalculating. Take another look at line {req.first_error}."
         hint_ink = ["compare with above", "check each term", ""]
+        fix_line = ""
     return {"hints": [h for h in hints if h][:3], "hint_ink": [h for h in hint_ink if h][:3],
-            "spoken_nudge": spoken}
+            "fix_line": fix_line or "", "spoken_nudge": spoken}
 
 
 class ProblemRequest(BaseModel):

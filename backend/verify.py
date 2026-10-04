@@ -649,9 +649,17 @@ def is_simplified_answer(text: str) -> bool:
                 if _written_expression(before) != _written_expression(after):
                     return False
                 # Catch cancellable rational factors and elementary identities,
-                # while allowing either expanded or factored polynomials.
+                # while allowing either expanded or factored polynomials: only
+                # fail when the reduction beats every honest spelling of the
+                # answer (trigsimp alone factors, which isn't "unfinished").
                 reduced = sp.trigsimp(sp.cancel(after))
-                if sp.count_ops(reduced) < sp.count_ops(after):
+                baseline = sp.count_ops(after)
+                for spelling in (sp.factor, sp.expand):
+                    try:
+                        baseline = min(baseline, sp.count_ops(spelling(after)))
+                    except Exception:
+                        pass
+                if sp.count_ops(reduced) < baseline:
                     return False
         return True
     except Exception:
@@ -742,14 +750,11 @@ def check_steps(problem: str | None, steps: list[tuple[int, str]], target: str |
     except Exception:
         reference = None
 
-<<<<<<< HEAD
     arrived = False
-=======
     # Parse everything first so a run of single-root lines ("x = 0" beside or
     # under "x = 5") can be read together as one root list — students and the
     # handwriting reader both split a quadratic's answers across lines.
-    groups: list[dict] = []  # {"lines": [...], "stmt": Statement|None, "err": str, "roots": (sym, [vals])|None}
->>>>>>> origin/main
+    groups: list[dict] = []  # {"lines": [...], "stmt": Statement|None, "err": str, "text": str, "roots": ...}
     for line, text in steps:
         stmt: Statement | None = None
         err = ""
@@ -766,13 +771,13 @@ def check_steps(problem: str | None, steps: list[tuple[int, str]], target: str |
             vals = vals + [frag[1]]
             g["lines"] = g["lines"] + [line]
             g["roots"] = (sym, vals)
+            g["text"] = f"{g['text']} or {text}"
             g["stmt"] = Statement("eq", sp.Mul(*[(sym - v) for v in vals]),
                                   sp.Integer(0), "=", solved=True)
             continue
-        groups.append({"lines": [line], "stmt": stmt, "err": err,
+        groups.append({"lines": [line], "stmt": stmt, "err": err, "text": text,
                        "roots": (frag[0], [frag[1]]) if frag is not None else None})
 
-    last: Statement | None = None
     for g in groups:
         cur = g["stmt"]
         if cur is None:
@@ -781,7 +786,7 @@ def check_steps(problem: str | None, steps: list[tuple[int, str]], target: str |
             if g["err"]:
                 prev = None  # can't chain through a line we couldn't read
             continue
-        cur = _answer_statement(cur, original, tsym, text)
+        cur = _answer_statement(cur, original, tsym, g["text"])
         if prev is None:
             check = StepCheck("unknown")
         else:
@@ -789,18 +794,14 @@ def check_steps(problem: str | None, steps: list[tuple[int, str]], target: str |
                 check = compare(prev, cur, tsym)
             except Exception as exc:  # never let one odd line break the board
                 check = StepCheck("unknown", f"sympy error: {exc}")
-<<<<<<< HEAD
         try:
-            final_answer = _is_final_answer(cur, original, tsym, text, reference)
+            final_answer = _is_final_answer(cur, original, tsym, g["text"], reference)
         except Exception:
             final_answer = False
-        results[line] = {"verdict": check.verdict, "detail": check.detail, "note": check.note,
-                         "final_answer": final_answer}
-        arrived = arrived or final_answer
-=======
         for line in g["lines"]:
-            results[line] = {"verdict": check.verdict, "detail": check.detail, "note": check.note}
->>>>>>> origin/main
+            results[line] = {"verdict": check.verdict, "detail": check.detail, "note": check.note,
+                             "final_answer": final_answer}
+        arrived = arrived or final_answer
         prev = cur
 
     arrived = arrived and not any(r["verdict"] == "invalid" for r in results.values())

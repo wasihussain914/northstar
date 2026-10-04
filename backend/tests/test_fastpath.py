@@ -42,7 +42,7 @@ def test_all_typed_lines_verify_without_a_model(monkeypatch):
 def test_typed_wrong_turn_still_gets_model_hints(monkeypatch):
     seen = {}
 
-    async def fake_read(problem, image, lines, typed=None, lang="en"):
+    async def fake_read(problem, image, lines, typed=None, lang="en", known=None):
         seen["read"] = True
         return fake_tutor.transcript_board(problem, typed, lines)
 
@@ -53,29 +53,6 @@ def test_typed_wrong_turn_still_gets_model_hints(monkeypatch):
     monkeypatch.setattr(tutor, "explain_line", fake_explain)
     monkeypatch.setattr(tutor, "read_board", fake_read)
     out = run_check(monkeypatch, {1: "2x - 6 + 4 = 10", 2: "2x + 2 = 10"}, [1, 2])
-<<<<<<< HEAD
-    assert out["first_error"] == 2 and seen["line"] == 2 and seen["read"]
-
-
-@pytest.mark.parametrize("text", ["u = x^2 + 1", "characteristic equation"])
-def test_typed_independent_work_gets_context_and_does_not_break_chain(monkeypatch, text):
-    seen = {}
-
-    async def fake_read(problem, image, lines, typed=None, lang="en"):
-        seen["read"] = True
-        board = fake_tutor.transcript_board(problem, typed, lines)
-        board["lines"][1].update(kind="intermediate", ai_verdict="ok")
-        return board
-
-    monkeypatch.setattr(tutor, "read_board", fake_read)
-    monkeypatch.setattr(tutor, "explain_line", never_read)
-    out = run_check(monkeypatch, {1: "2x - 2 = 10", 2: text, 3: "2x = 12"}, [1, 2, 3])
-    assert seen["read"]
-    assert [l["status"] for l in out["lines"]] == ["ok", "skip", "ok"]
-    assert out["first_error"] is None
-    assert out["hints"] == []
-    assert out["arrived"] is False
-=======
     # The check never waits on the hint call; the client asks /api/hints after.
     assert out["first_error"] == 2 and out["hints"] == [] and "line" not in seen
 
@@ -126,7 +103,26 @@ def test_only_the_new_line_is_read(monkeypatch):
         [(1, "ok", "verified"), (2, "ok", "verified"), (3, "ok", "verified")]
     assert out["timing_ms"]["model_read"] is True and out["timing_ms"]["lines_read"] == 1
     assert set(out["known"]) == {1, 2, 3}
->>>>>>> origin/main
+
+
+@pytest.mark.parametrize("text", ["u = x^2 + 1", "characteristic equation"])
+def test_typed_independent_work_gets_context_and_does_not_break_chain(monkeypatch, text):
+    seen = {}
+
+    async def fake_read(problem, image, lines, typed=None, lang="en", known=None):
+        seen["read"] = True
+        board = fake_tutor.transcript_board(problem, typed, lines)
+        board["lines"][1].update(kind="intermediate", ai_verdict="ok")
+        return board
+
+    monkeypatch.setattr(tutor, "read_board", fake_read)
+    monkeypatch.setattr(tutor, "explain_line", never_read)
+    out = run_check(monkeypatch, {1: "2x - 2 = 10", 2: text, 3: "2x = 12"}, [1, 2, 3])
+    assert seen["read"]
+    assert [l["status"] for l in out["lines"]] == ["ok", "skip", "ok"]
+    assert out["first_error"] is None
+    assert out["hints"] == []
+    assert out["arrived"] is False
 
 
 def test_unparseable_typed_text_falls_back_to_the_model(monkeypatch):

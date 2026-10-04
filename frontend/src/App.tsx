@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { checkBoard, health } from "./api";
 import { Board, type TeacherInk, type Tool } from "./board/Board";
-<<<<<<< HEAD
-import { LINES, lineOf, type Stroke } from "./board/geometry";
-import { textToStrokes } from "./board/handwriting"; // superseded by vector glyph renderer
-=======
 import { LINES, inkImage, lineOf, snapshot, type Stroke } from "./board/geometry";
 import { exportBoardPdf } from "./exportPdf";
 import { HomeworkSheet } from "./HomeworkSheet";
@@ -12,7 +8,6 @@ import { sameProblem, useHomework, type HomeworkStep } from "./homework";
 // Font-rasterised handwriting: still the working path for typed steps, the
 // demo, and the dev helper until the vector glyph renderer can emit strokes.
 import { textToStrokes, typedTranscript } from "./board/handwriting";
->>>>>>> origin/main
 import { AskCard } from "./AskCard";
 import { DEMOS, runDemo, writeLines } from "./demo";
 import { glyphStrokes } from "./board/glyphInk";
@@ -150,6 +145,19 @@ export default function App() {
       .catch(() => { /* backend not running yet or no samples — silent */ });
   }, []);
 
+  const handleGlyphFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const json = JSON.parse(ev.target?.result as string);
+        setGlyphLibrary(loadDataset(json));
+      } catch { /* ignore bad files */ }
+    };
+    reader.readAsText(file);
+  };
+
   const tutor = useTutor(strokes, problem, voiceOn, lang);
   const { trip, countHint } = useTrip(strokes, tutor);
 
@@ -220,8 +228,8 @@ export default function App() {
   const handleShowFix = (line: number, fixLine: string) => {
     countHint();
     setTeacherInk(null);
-    if (!fixLine.trim() || !glyphLibrary) return;
-    const next = textToStrokes(fixLine, line, glyphLibrary);
+    if (!fixLine.trim()) return;
+    const next = writeRef.current(fixLine, line);
     if (!next.length) return;
     dispatch({ type: "replaceLine", line, strokes: next });
   };
@@ -271,17 +279,8 @@ export default function App() {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     (window as unknown as { northstar: object }).northstar = {
-<<<<<<< HEAD
-      write: (line: number, text: string) => {
-        const lib = glyphLibraryRef.current;
-        if (!lib) return;
-        const next = textToStrokes(text, line, lib);
-        if (next.length) dispatch({ type: "replaceLine", line, strokes: next });
-      },
-=======
       write: (line: number, text: string) => dispatch({ type: "addMany", strokes: writeRef.current(text, line) }),
       finish: () => finishRef.current(),
->>>>>>> origin/main
       erase: (line: number) =>
         dispatch({ type: "erase", ids: strokesRef.current.filter((s) => lineOf(s) === line).map((s) => s.id) }),
       clear: () => dispatch({ type: "clear" }),
@@ -550,6 +549,9 @@ export default function App() {
           <ToolButton active={tool === "eraser"} onClick={() => setTool("eraser")} label="Eraser (E)">
             <path d="M7.5 16h9M3.8 11.8l7-7a1.8 1.8 0 012.5 0l2.9 2.9a1.8 1.8 0 010 2.5L10 16.4H7.6l-3.8-3.8a.6.6 0 010-.8z" />
           </ToolButton>
+          <ToolButton active={tool === "scroll"} onClick={() => setTool("scroll")} label="Scroll board (H) — drag to move up or down">
+            <path d="M10 2v16M6 6l4-4 4 4M6 14l4 4 4-4" />
+          </ToolButton>
           <span className="pill-divider" />
           <ToolButton onClick={() => dispatch({ type: "undo" })} disabled={!past.length} label="Undo (⌘Z)">
             <path d="M7 5L3 9l4 4M3.5 9H12a5 5 0 010 10H9" />
@@ -614,11 +616,6 @@ export default function App() {
             <span className="hw-btn-text">Homework</span>
             {homework.doc.entries.length > 0 && <span className="hw-count">{homework.doc.entries.length}</span>}
           </button>
-<<<<<<< HEAD
-          <span className="divider" />
-          
-=======
->>>>>>> origin/main
         </div>
       </header>
 
@@ -666,30 +663,6 @@ export default function App() {
           <div className="board-stage">
             <RecalcBanner errorKey={tutor.errorKey} line={tutor.errorLine} />
             <Starburst fireKey={arrived ? problem : ""} />
-<<<<<<< HEAD
-            <div className="float-tools" role="toolbar" aria-label="Board tools">
-              <ToolButton active={tool === "pen"} onClick={() => setTool("pen")} label="Pen (P)">
-                <path d="M4 16l1-4 8.5-8.5a2.1 2.1 0 013 3L8 15l-4 1z" />
-              </ToolButton>
-              <ToolButton active={tool === "eraser"} onClick={() => setTool("eraser")} label="Eraser (E)">
-                <path d="M7.5 16h9M3.8 11.8l7-7a1.8 1.8 0 012.5 0l2.9 2.9a1.8 1.8 0 010 2.5L10 16.4H7.6l-3.8-3.8a.6.6 0 010-.8z" />
-              </ToolButton>
-              <ToolButton active={tool === "scroll"} onClick={() => setTool("scroll")} label="Scroll board (H) - drag to move up or down">
-                <path d="M10 2v16M6 6l4-4 4 4M6 14l4 4 4-4" />
-              </ToolButton>
-              <span className="float-divider" />
-              <ToolButton onClick={() => dispatch({ type: "undo" })} disabled={!past.length} label="Undo (⌘Z)">
-                <path d="M7 5L3 9l4 4M3.5 9H12a5 5 0 010 10H9" />
-              </ToolButton>
-              <ToolButton onClick={() => dispatch({ type: "redo" })} disabled={!future.length} label="Redo (⇧⌘Z)">
-                <path d="M13 5l4 4-4 4M16.5 9H8a5 5 0 000 10h3" />
-              </ToolButton>
-              <span className="float-divider" />
-              <ToolButton onClick={() => dispatch({ type: "clear" })} disabled={!strokes.length} label="Clear board">
-                <path d="M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11" />
-              </ToolButton>
-            </div>
-=======
             <FloatingMic problem={problem} strokes={strokes} result={tutor.result} voiceOn={voiceOn} lang={lang} />
             {!arrived && (
               <button
@@ -708,7 +681,6 @@ export default function App() {
               </button>
             )}
             <Mascot mood={pipMood(tutor, arrived)} voiceOn={voiceOn} besideDrawer={panelOpen} />
->>>>>>> origin/main
             <Board
               strokes={strokes}
               problem={problem}
@@ -756,12 +728,9 @@ export default function App() {
             trip={trip}
             lastInkLine={lastUsed || null}
             onHint={handleHint}
-<<<<<<< HEAD
             onShowFix={handleShowFix}
-=======
             onFinish={finishIt}
             finishing={finishing}
->>>>>>> origin/main
             onNewTrip={advance}
             nextLabel={hasNextStop ? `Next stop · ${stopIndex + 2} of ${stops.length}` : "New problem"}
             docNote={

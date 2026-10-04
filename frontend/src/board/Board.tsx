@@ -102,13 +102,9 @@ type TeacherState = {
   pointsPerFrame: number; // advances fast enough to finish in ~1 second
 };
 
-<<<<<<< HEAD
-export function Board({ strokes, problem, promptStart, tool, markers, errorLine, selectedLine, teacherInk, glyphLibrary, onAdd, onErase, onSelectLine, onInteract }: Props) {
+export function Board({ strokes, problem, promptStart, tool, markers, errorLine, selectedLine, teacherInk, glyphLibrary, onAdd, onErase, onSelectLine, onInteract, theme }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pan = useRef<{ pointerId: number; y: number; scrollTop: number } | null>(null);
-=======
-export function Board({ strokes, problem, promptStart, tool, markers, errorLine, selectedLine, teacherInk, glyphLibrary, onAdd, onErase, onSelectLine, onInteract, theme }: Props) {
->>>>>>> origin/main
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(800);

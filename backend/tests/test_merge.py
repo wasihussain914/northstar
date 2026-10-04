@@ -57,7 +57,6 @@ def test_without_sympy_uses_claude_verdicts():
     assert merge(board, None)[0]["status"] == "error"
 
 
-<<<<<<< HEAD
 def test_intermediate_work_ignores_adjacent_mismatch_but_keeps_actual_errors():
     board = {"lines": [
         line(1, "y(x) = C1*exp(2*x)", kind="intermediate"),
@@ -68,7 +67,8 @@ def test_intermediate_work_ignores_adjacent_mismatch_but_keeps_actual_errors():
     assert [(l["status"], l["source"]) for l in merge(board, sym)] == [
         ("skip", "ai"), ("skip", "ai"), ("error", "ai"),
     ]
-=======
+
+
 def test_claim_lines_are_judged_by_the_model_not_skipped():
     # Proof steps written in words ("since C is linear, v + w is in C") are
     # claims: no sympy, but still judged, never silently skipped.
@@ -85,4 +85,3 @@ def test_questions_written_on_the_board_are_skipped_not_judged():
     assert "question" in SKIP_KINDS
     board = {"lines": [line(1, "", kind="question", ai="unclear")]}
     assert merge(board, None)[0]["status"] == "skip"
->>>>>>> origin/main

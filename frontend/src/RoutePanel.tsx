@@ -36,11 +36,7 @@ interface Props {
   children?: React.ReactNode;
 }
 
-<<<<<<< HEAD
-export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, lastInkLine, onHint, onShowFix, onNewTrip, nextLabel, practiceCard, children }: Props) {
-=======
-export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, lastInkLine, onHint, onNewTrip, nextLabel, practiceCard, docNote, onFinish, finishing, children }: Props) {
->>>>>>> origin/main
+export function RoutePanel({ tutor, problem, selectedLine, onSelectLine, voiceOn, trip, lastInkLine, onHint, onShowFix, onNewTrip, nextLabel, practiceCard, docNote, onFinish, finishing, children }: Props) {
   const { result, errorLine, errorKey, phase, failure } = tutor;
   const [hintsShown, setHintsShown] = useState(0);
   const [showNext, setShowNext] = useState(false);

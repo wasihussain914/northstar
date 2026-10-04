@@ -151,8 +151,8 @@ If a line is ambiguous, pick the most likely reading.
 - latex: the line as LaTeX (no surrounding $).
 - sympy: the line in the dialect below. Leave it empty if the line is prose, crossed out, or clearly unfinished.
 - If a line continues a chain of equal expressions (starts with "="), give just the expression after the "=".
-<<<<<<< HEAD
-- kind: equation, inequality, expression, formula, intermediate, crossed_out, not_math, or incomplete.
+- kind: equation, inequality, expression, formula, intermediate, claim, question, crossed_out, not_math, \
+or incomplete.
 - formula: a general formula, identity, definition or rule related to the problem that the student wrote down \
 for reference rather than derived from the line before, e.g. the quadratic formula x = (-b ± sqrt(b^2 - 4ac))/(2a), \
 the discriminant b^2 - 4ac, coordinate conversions like x = ρ sin φ cos θ or r^2 = x^2 + y^2, an identity like \
@@ -166,9 +166,15 @@ problem's actual numbers and need not be equivalent to the previous line. Use th
 to judge it on its own mathematical merits. Correct or uncertain intermediate work gets no wrong-turn mark. \
 For example, for y' = 2y with y(0) = 3, y = C*exp(2x) is valid unfinished work, not a missed condition. \
 Use equation/expression for a proposed final solution so the domain checker can verify completion.
-- ai_verdict: ok, error, or unclear. Judge correctness in context, not merely whether adjacent lines are \
-equivalent. A line that correctly carries forward an earlier mistake is ok; only the line where the mistake \
-is made is an error. Formula and intermediate lines are outside the sequential equivalence chain: error \
+- A claim is a proof step stated in words, possibly with math inside it ("let m be the minimum weight", \
+"since C is linear, v + w is in C", "therefore d = m"). Proof steps are never not_math: judge each claim's \
+ai_verdict by whether it is true and follows from the lines before it (and the problem), exactly as you would \
+a computation line. For a claim, sympy may be empty. A question is the student writing TO you ("what do I do?", \
+"help", "is this right so far?", "im not sure what to do") — transcribe it verbatim into latex as plain text \
+and never judge it.
+- ai_verdict: does this line follow correctly from the line before it (the first line follows from the problem)? \
+ok, error, or unclear. A line that correctly carries forward an earlier mistake is ok; only the line where the \
+mistake is made is an error. Formula and intermediate lines are outside the sequential equivalence chain: error \
 only for an actual mathematical mistake, not for missing derivation, a change of method, or unfinished \
 constants. Use unclear if you cannot establish correctness. Resume ordinary steps against the last ordinary \
 line of work; if a line instead develops independent intermediate work, classify it as intermediate too. \
@@ -178,17 +184,6 @@ answer. Usually this is a number (including a fraction or radical), or an isolat
 or x = an expression. A number alone may give the requested variable's value. Merely reaching that shape \
 does not prove correctness: check the value, all required solutions, and any conditions. False for reference \
 formulas, supporting work, unfinished steps, incorrect answers, or uncertainty. Do not infer this from eta_steps.
-=======
-- kind: equation, inequality, expression, claim, question, crossed_out, not_math, or incomplete. A claim is a \
-proof step stated in words, possibly with math inside it ("let m be the minimum weight", "since C is linear, \
-v + w is in C", "therefore d = m"). Proof steps are never not_math: judge each claim's ai_verdict by whether \
-it is true and follows from the lines before it (and the problem), exactly as you would a computation line. \
-For a claim, sympy may be empty. A question is the student writing TO you ("what do I do?", "help", "is this \
-right so far?", "im not sure what to do") — transcribe it verbatim into latex as plain text and never judge it.
-- ai_verdict: does this line follow correctly from the line before it (the first line follows from the problem)? \
-ok, error, or unclear. A line that correctly carries forward an earlier mistake is ok; only the line where the \
-mistake is made is an error.
->>>>>>> origin/main
 
 Then guide the student:
 - next_step_hint: if the work so far is correct but unfinished, a Socratic nudge toward the next move, without \
@@ -251,13 +246,8 @@ BOARD_SCHEMA: dict[str, Any] = {
                     "line": {"type": "integer"},
                     "latex": {"type": "string"},
                     "sympy": {"type": "string"},
-<<<<<<< HEAD
                     "kind": {"type": "string", "enum": ["equation", "inequality", "expression", "formula", "intermediate",
-                                                        "crossed_out", "not_math", "incomplete"]},
-=======
-                    "kind": {"type": "string", "enum": ["equation", "inequality", "expression", "claim",
-                                                        "question", "crossed_out", "not_math", "incomplete"]},
->>>>>>> origin/main
+                                                        "claim", "question", "crossed_out", "not_math", "incomplete"]},
                     "ai_verdict": {"type": "string", "enum": ["ok", "error", "unclear"]},
                     "final_answer": {"type": "boolean"},
                 },
