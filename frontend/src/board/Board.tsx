@@ -20,7 +20,7 @@ import { drawGlyph, drawGlyphPartialStroke } from "../glyphs/lib/renderGlyph";
 import type { GlyphLibrary } from "../glyphs/types/handwriting";
 // animation constants only used by the standalone renderer, not teacher pen
 
-export type Tool = "pen" | "eraser" | "scroll";
+export type Tool = "pen" | "eraser";
 
 /** Circle the handwriting on a flagged line. */
 function drawMistakeMark(
@@ -102,13 +102,7 @@ type TeacherState = {
   pointsPerFrame: number; // advances fast enough to finish in ~1 second
 };
 
-<<<<<<< HEAD
-export function Board({ strokes, problem, promptStart, tool, markers, errorLine, selectedLine, teacherInk, glyphLibrary, onAdd, onErase, onSelectLine, onInteract }: Props) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const pan = useRef<{ pointerId: number; y: number; scrollTop: number } | null>(null);
-=======
 export function Board({ strokes, problem, promptStart, tool, markers, errorLine, selectedLine, teacherInk, glyphLibrary, onAdd, onErase, onSelectLine, onInteract, theme }: Props) {
->>>>>>> origin/main
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(800);
@@ -413,15 +407,6 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     onInteract();
-    if (tool === "scroll") {
-      // Touch uses native scrolling with momentum; mouse and stylus drag the paper.
-      if (e.pointerType !== "touch" && e.button === 0 && scrollRef.current) {
-        e.preventDefault();
-        pan.current = { pointerId: e.pointerId, y: e.clientY, scrollTop: scrollRef.current.scrollTop };
-        e.currentTarget.setPointerCapture(e.pointerId);
-      }
-      return;
-    }
     const { palm, preempt } = notePointerDown(
       contacts.current,
       e.pointerId,
@@ -474,12 +459,6 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (tool === "scroll") {
-      if (pan.current?.pointerId === e.pointerId && scrollRef.current) {
-        scrollRef.current.scrollTop = pan.current.scrollTop + pan.current.y - e.clientY;
-      }
-      return;
-    }
     const rect = e.currentTarget.getBoundingClientRect();
     if (tool === "eraser" && activePointer.current === null && e.pointerType !== "touch") {
       const p = toPoint(e, rect);
@@ -515,7 +494,6 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
   };
 
   const finish = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (pan.current?.pointerId === e.pointerId) pan.current = null;
     notePointerUp(contacts.current, e.pointerId);
     if (e.pointerId !== activePointer.current) return;
     activePointer.current = null;
@@ -546,7 +524,7 @@ export function Board({ strokes, problem, promptStart, tool, markers, errorLine,
   };
 
   return (
-    <div ref={scrollRef} className="board-scroll" tabIndex={0} role="region" aria-label="Whiteboard. Scroll for more writing space.">
+    <div className="board-scroll">
       <div className={`board${scale < 0.7 ? " compact" : ""}`} style={{ height: paperH * scale }}>
         <div className="gutter">
           <div className="gutter-question" style={{ height: LINE_H * scale }} aria-hidden="true">Q</div>

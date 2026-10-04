@@ -1,7 +1,4 @@
-import { layoutText } from "../glyphs/lib/renderText";
-import { transformPoint } from "../glyphs/lib/inkMask";
-import type { GlyphLibrary } from "../glyphs/types/handwriting";
-import { LINE_H, lineOf, makeStroke, type Point, type Stroke } from "./geometry";
+import { LINE_H, lineOf, makeStroke, type Stroke } from "./geometry";
 
 /** The text each helper-written line was made from (tagged on its first stroke). */
 const typed = new WeakMap<Stroke, string>();
@@ -16,62 +13,19 @@ export function typedTranscript(strokes: Stroke[]): Record<number, string> | und
   return Object.keys(out).length ? out : undefined;
 }
 
-<<<<<<< HEAD
-/** Large enough to fill a ruled line; not the 20px red margin-note size. */
-const FIX_FONT_HEIGHT = Math.round(LINE_H * 0.58);
-=======
 /** Tag a written line with the text it was made from, so the server gets it verbatim. */
 export function rememberText(strokes: Stroke[], text: string) {
   if (strokes.length) typed.set(strokes[0], text);
 }
 
 const FONT_FAMILY = '"Bradley Hand", "Noteworthy", "Chalkboard SE", "Comic Sans MS", cursive';
->>>>>>> origin/main
 
 /**
- * Turn plain text into black board strokes on a ruled line, using the personal
- * glyph library. The text is remembered so the next check gets it verbatim.
+ * Turn typed text into ink strokes on a ruled line, in a handwriting font.
+ * Used for typed steps (no stylus needed) and the demo autopilot. The text is
+ * remembered so the server gets it verbatim instead of reading it back.
  */
-export function textToStrokes(text: string, line: number, library: GlyphLibrary, x0 = 28): Stroke[] {
-  const phrase = text.trim();
-  if (!phrase) return [];
-
-  const baseline = (line - 1) * LINE_H + LINE_H * 0.72;
-  const seed = line * 997 + (phrase.charCodeAt(0) || 0);
-  const result = layoutText(phrase, library, x0, baseline, {
-    fontHeight: FIX_FONT_HEIGHT,
-    inkClearance: 1,
-    strokeWidthPx: 2.2,
-    seed,
-  });
-
-  const strokes: Stroke[] = [];
-  for (const layout of result.glyphs) {
-    if (!layout.glyph || layout.type === "space") continue;
-    const scaledHeight = layout.scaledHeight;
-    const cx = layout.placeX + (layout.glyph.width * scaledHeight) / 2;
-    const cy = layout.baseline + layout.verticalOffset - scaledHeight / 2;
-    for (const gStroke of layout.glyph.strokes) {
-      if (gStroke.length === 0) continue;
-      const points: Point[] = [];
-      for (const p of gStroke) {
-        const pt = transformPoint(p, layout.glyph, cx, cy, scaledHeight, layout.rotationRad);
-        points.push([pt.x, pt.y, 0.5]);
-      }
-      if (points.length === 1) {
-        points.push([points[0][0] + 0.5, points[0][1], 0.5]);
-      }
-      strokes.push(makeStroke(points, true));
-    }
-  }
-  if (strokes.length) typed.set(strokes[0], phrase);
-  return strokes;
-}
-
-const FONT_FAMILY = '"Bradley Hand", "Noteworthy", "Chalkboard SE", "Comic Sans MS", cursive';
-
-/** Rasterise text in a handwriting font into short horizontal strokes on a ruled line. */
-function fontStrokes(text: string, line: number, x0: number, fontPx: number): Stroke[] {
+export function textToStrokes(text: string, line: number, x0 = 28, fontPx = 46, remember = true): Stroke[] {
   const probe = document.createElement("canvas").getContext("2d")!;
   probe.font = `${fontPx}px ${FONT_FAMILY}`;
   const w = Math.ceil(probe.measureText(text).width) + 8;
@@ -87,6 +41,7 @@ function fontStrokes(text: string, line: number, x0: number, fontPx: number): St
   ctx.fillText(text, 2, Math.round(h * 0.66));
   const { data } = ctx.getImageData(0, 0, w, h);
 
+  // Fill the glyphs with short horizontal strokes, one per scan row.
   const top = (line - 1) * LINE_H;
   const strokes: Stroke[] = [];
   for (let y = 0; y < h; y += 2) {
@@ -100,6 +55,7 @@ function fontStrokes(text: string, line: number, x0: number, fontPx: number): St
       }
     }
   }
+  if (remember && strokes.length) typed.set(strokes[0], text);
   return strokes;
 }
 
@@ -113,10 +69,10 @@ export function questionStrokes(text: string, maxWidth: number): Stroke[] {
   if (!clean) return [];
   const shown = clean.length > 96 ? `${clean.slice(0, 93)}…` : clean;
   for (const fontPx of [40, 32, 26, 20]) {
-    const strokes = fontStrokes(shown, 1, 20, fontPx);
+    const strokes = textToStrokes(shown, 1, 20, fontPx, false);
     if (!strokes.length) return [];
     const maxX = Math.max(...strokes.map((s) => s.box.maxX));
     if (maxX <= maxWidth) return strokes;
   }
-  return fontStrokes(shown, 1, 20, 20);
+  return textToStrokes(shown, 1, 20, 20, false);
 }

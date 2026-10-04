@@ -7,7 +7,6 @@ import {
   ROTATION_JITTER_DEG,
   VERTICAL_JITTER_PX,
   SPACE_WIDTH_FACTOR,
-  WORD_SPACE_WIDTH_FACTOR,
   DEFAULT_INK_CLEARANCE,
   DEFAULT_STROKE_WIDTH,
 } from "./variation";
@@ -67,45 +66,6 @@ const HARDCODED_GLYPHS: Map<string, NormalizedGlyph> = new Map([
   ["−",  makeMinus("−")],   // Unicode minus sign U+2212
   ["–",  makeMinus("–")],   // en-dash U+2013
 ]);
-
-/**
- * A plain text "f" (hooked stem + crossbar) for use inside words. The personal
- * dataset's f is the math-style one, kept for f(x), f'(x), etc.
- */
-const PLAIN_F: NormalizedGlyph = {
-  label: "f",
-  strokes: [
-    [
-      { x: 0.52, y: 0.12 }, { x: 0.47, y: 0.05 }, { x: 0.40, y: 0.01 },
-      { x: 0.32, y: 0.00 }, { x: 0.25, y: 0.03 }, { x: 0.20, y: 0.10 },
-      { x: 0.18, y: 0.20 }, { x: 0.18, y: 0.40 }, { x: 0.18, y: 0.60 },
-      { x: 0.18, y: 0.80 }, { x: 0.18, y: 1.00 },
-    ],
-    [{ x: 0.02, y: 0.40 }, { x: 0.21, y: 0.40 }, { x: 0.40, y: 0.40 }],
-  ],
-  width: 0.52,
-  height: 1,
-  sourceId: "__hardcoded__",
-};
-
-const LETTER = /\p{L}/u;
-
-/** inWord[i] is true when chars[i] belongs to a run of 2+ letters (a word, not a math variable). */
-function markWords(chars: string[]): boolean[] {
-  const inWord = new Array<boolean>(chars.length).fill(false);
-  let i = 0;
-  while (i < chars.length) {
-    if (!LETTER.test(chars[i])) {
-      i++;
-      continue;
-    }
-    let j = i;
-    while (j < chars.length && LETTER.test(chars[j])) j++;
-    if (j - i >= 2) inWord.fill(true, i, j);
-    i = j;
-  }
-  return inWord;
-}
 
 /**
  * Fallback glyph for unknown characters.
@@ -178,23 +138,16 @@ export function layoutText(
   const rng = makePrng(opts.seed ?? 42);
 
   const chars = Array.from(text);
-  const inWord = markWords(chars);
   const glyphs: GlyphLayout[] = [];
   const missingLabels: string[] = [];
   const placedMasks: InkMask[] = [];
 
   let cursorX = startX;
 
-  for (let i = 0; i < chars.length; i++) {
-    const char = chars[i];
-    // Space: wide between words, tight between math tokens like "2x - 6".
+  for (const char of chars) {
+    // Space
     if (char === " ") {
-      let prev = i - 1;
-      while (prev >= 0 && chars[prev] === " ") prev--;
-      let next = i + 1;
-      while (next < chars.length && chars[next] === " ") next++;
-      const byWord = (prev >= 0 && inWord[prev]) || (next < chars.length && inWord[next]);
-      const spaceWidth = fontHeight * (byWord ? WORD_SPACE_WIDTH_FACTOR : SPACE_WIDTH_FACTOR);
+      const spaceWidth = fontHeight * SPACE_WIDTH_FACTOR;
       const partial: Omit<GlyphLayout, "rightEdge"> = {
         type: "space",
         label: " ",
@@ -219,19 +172,18 @@ export function layoutText(
       continue;
     }
 
-    // Hardcoded shapes (minus, etc.) stay geometric — no wobble.
-    // Library glyphs: prefer the exact label, then lowercase (dataset is lowercase).
-    // An f inside a word is the plain text f; a lone f (math) uses the personal glyph.
+    // Random variation
+    const glyphScale = 1 - SCALE_JITTER + rng() * SCALE_JITTER * 2;
+    const rotationRad = (-ROTATION_JITTER_DEG + rng() * ROTATION_JITTER_DEG * 2) * DEG_TO_RAD;
+    const verticalOffset = (-VERTICAL_JITTER_PX + rng() * VERTICAL_JITTER_PX * 2);
+
+    const scaledHeight = fontHeight * glyphScale;
+
+    // Find glyph variant — hardcoded shapes take priority over the library
     const hardcoded = HARDCODED_GLYPHS.get(char);
-    const variants =
-      hardcoded ? null
-      : inWord[i] && char.toLowerCase() === "f" ? [PLAIN_F]
-      : library.byLabel.get(char) ?? library.byLabel.get(char.toLowerCase());
+    const variants = hardcoded ? null : library.byLabel.get(char);
     let glyph: NormalizedGlyph;
     let isFallback = false;
-    let glyphScale = 1;
-    let rotationRad = 0;
-    let verticalOffset = 0;
 
     if (hardcoded) {
       glyph = hardcoded;
@@ -240,14 +192,9 @@ export function layoutText(
       glyph = makeFallbackGlyph(char);
       isFallback = true;
     } else {
-      glyphScale = 1 - SCALE_JITTER + rng() * SCALE_JITTER * 2;
-      rotationRad = (-ROTATION_JITTER_DEG + rng() * ROTATION_JITTER_DEG * 2) * DEG_TO_RAD;
-      verticalOffset = -VERTICAL_JITTER_PX + rng() * VERTICAL_JITTER_PX * 2;
       const idx = Math.floor(rng() * variants.length);
       glyph = variants[idx];
     }
-
-    const scaledHeight = fontHeight * glyphScale;
 
     const drawOpts: DrawGlyphOptions = {
       fontHeight,

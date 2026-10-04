@@ -23,7 +23,6 @@ import random
 import re
 import string
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Literal
 
 import sympy as sp
@@ -214,13 +213,13 @@ def _rewrite(text: str) -> str:
     return text
 
 
-def _parse_side(text: str, evaluate: bool = True) -> sp.Basic:
+def _parse_side(text: str) -> sp.Basic:
     text = text.strip()
     if not text:
         raise ParseError("empty side")
     try:
         expr = parse_expr(text, local_dict=dict(_LOCALS), global_dict={"__builtins__": {}, **_sympy_globals()},
-                          transformations=_TRANSFORMS, evaluate=evaluate)
+                          transformations=_TRANSFORMS, evaluate=True)
     except Exception as exc:  # sympy raises many error types on bad input
         raise ParseError(f"could not parse {text!r}: {exc}") from exc
     if isinstance(expr, list):
@@ -261,7 +260,7 @@ def _check_idents(text: str) -> None:
             raise ParseError(f"unknown name {ident!r}")
 
 
-def parse_statement(text: str, *, evaluate: bool = True) -> Statement:
+def parse_statement(text: str) -> Statement:
     """Parse one line, e.g. '2*(x-3)+4 = 10', 'x > 3', 'diff(x^2, x)' or '[[1, 2], [3, 4]]'."""
     text = _clean(text)
     if not text or not _ALLOWED_CHARS.match(text):
@@ -273,7 +272,7 @@ def parse_statement(text: str, *, evaluate: bool = True) -> Statement:
 
     parts = _REL_SPLIT.split(text)
     if len(parts) == 1:
-        side = _parse_side(parts[0], evaluate)
+        side = _parse_side(parts[0])
         if isinstance(side, sp.MatrixBase):
             return Statement("matrix", side)
         return Statement("expr", side)
@@ -281,7 +280,7 @@ def parse_statement(text: str, *, evaluate: bool = True) -> Statement:
         lhs, op, rhs = parts
         if op == "!=":
             raise ParseError("'!=' is not supported")
-        left, right = _parse_side(lhs, evaluate), _parse_side(rhs, evaluate)
+        left, right = _parse_side(lhs), _parse_side(rhs)
         if isinstance(left, sp.MatrixBase) or isinstance(right, sp.MatrixBase):
             raise ParseError("a matrix can't be part of a relation")
         kind = "eq" if op == "=" else "ineq"
@@ -575,133 +574,6 @@ def is_solved_form(stmt: Statement, target: sp.Symbol) -> bool:
     return stmt.rhs == target and target not in stmt.lhs.free_symbols
 
 
-_UNFINISHED = (sp.Integral, sp.Derivative, sp.Limit, sp.Sum, sp.Determinant, sp.Inverse)
-
-
-@lru_cache(maxsize=128)
-def reference_value(expr: sp.Basic) -> sp.Basic:
-    """Compute the destination before judging work; reuse it across board checks."""
-    return sp.simplify(expr.doit())
-
-
-def _written_expression(expr: sp.Basic) -> sp.Basic:
-    """Normalize notation without doing the student's arithmetic.
-
-    Term order, signs, and reduced fractions are spelling choices. Combining
-    like terms, reducing fractions, and evaluating powers are still work.
-    """
-    if not expr.args:
-        return expr
-    args = [_written_expression(arg) for arg in expr.args]
-    if expr.is_Add or expr.is_Mul:
-        args = [child for arg in args for child in (arg.args if arg.func == expr.func else (arg,))]
-        if expr.is_Mul:
-            # A reciprocal is the ordinary written denominator of a fraction.
-            integers = [arg for arg in args if arg.is_Integer and abs(arg) != 1]
-            fractions = [arg for arg in args if arg.is_Rational and not arg.is_Integer]
-            if len(integers) == len(fractions) == 1:
-                numerator, fraction = integers[0], fractions[0]
-                if abs(fraction.p) == 1 and sp.gcd(numerator, fraction.q) == 1:
-                    args.remove(numerator)
-                    args.remove(fraction)
-                    args.append(numerator * fraction)
-            # Unary signs and the numerator in 1/n need no further calculation.
-            signs = sum(arg == -1 for arg in args)
-            args = [arg for arg in args if arg not in (sp.S.One, -sp.S.One)]
-            if signs % 2:
-                numeric = next((i for i, arg in enumerate(args) if arg.is_Number), None)
-                if numeric is None:
-                    args.append(-sp.S.One)
-                else:
-                    args[numeric] = -args[numeric]
-        if not args:
-            return sp.S.One if expr.is_Mul else sp.S.Zero
-        if len(args) == 1:
-            return args[0]
-        return expr.func(*sorted(args, key=sp.default_sort_key), evaluate=False)
-    if expr.is_Pow:
-        base, exponent = args
-        if base.is_Integer and base != 0 and exponent == -1:
-            return sp.Rational(1, base)
-        return sp.Pow(base, exponent, evaluate=False)
-    return expr.func(*args)
-
-
-def is_simplified_answer(text: str) -> bool:
-    """Completion requires evaluated operators and finished basic arithmetic.
-
-    Equivalent expanded and factored answers are both allowed; no single
-    symbolic spelling is required.
-    """
-    try:
-        written = parse_statement(text, evaluate=False)
-        evaluated = parse_statement(text)
-        for raw, value in ((written.lhs, evaluated.lhs), (written.rhs, evaluated.rhs)):
-            if raw is None:
-                continue
-            if raw.has(*_UNFINISHED) or value.has(*_UNFINISHED):
-                return False
-            if isinstance(raw, sp.MatrixBase):
-                pairs = zip(raw, value)
-            else:
-                pairs = [(raw, value)]
-            for before, after in pairs:
-                if _written_expression(before) != _written_expression(after):
-                    return False
-                # Catch cancellable rational factors and elementary identities,
-                # while allowing either expanded or factored polynomials.
-                reduced = sp.trigsimp(sp.cancel(after))
-                if sp.count_ops(reduced) < sp.count_ops(after):
-                    return False
-        return True
-    except Exception:
-        return False
-
-
-@lru_cache(maxsize=128)
-def _reference_solution(problem: str, target: sp.Symbol | None) -> sp.Basic | None:
-    original = parse_statement(problem)
-    if original.kind == "expr":
-        return reference_value(original.lhs)
-    if target is not None and original.kind in ("eq", "ineq") and target in original.free:
-        return _solution_set(original, target)
-    return None
-
-
-def _is_numeric_answer(stmt: Statement, text: str) -> bool:
-    """Numbers, fractions and radicals count; unfinished arithmetic does not."""
-    if stmt.kind != "expr" or not stmt.lhs.is_number or not stmt.lhs.is_finite:
-        return False
-    number = r"(?:\d+(?:\.\d*)?|\.\d+)"
-    atom = rf"(?:{number}|pi|E|sqrt\({number}\))"
-    return re.fullmatch(rf"[+-]?{atom}(?:/[+-]?{atom})?", _clean(text).replace(" ", "")) is not None
-
-
-def _answer_statement(stmt: Statement, original: Statement | None,
-                      target: sp.Symbol | None, text: str) -> Statement:
-    """Interpret a bare numeric answer as the value of the requested variable."""
-    if (original is not None and original.kind == "eq" and target is not None
-            and _is_numeric_answer(stmt, text)):
-        return Statement("eq", target, stmt.lhs)
-    return stmt
-
-
-def _is_final_answer(stmt: Statement, original: Statement | None,
-                     target: sp.Symbol | None, text: str, reference: sp.Basic | None) -> bool:
-    """Check an answer against the problem, independently of the previous step."""
-    if original is None or reference is None or not is_simplified_answer(text):
-        return False
-    if stmt.kind == "expr":
-        return original.kind == "expr" and exprs_equal(reference, stmt.lhs) is True
-    if target is None or not is_solved_form(stmt, target):
-        return False
-    if original.kind not in ("eq", "ineq") or target not in original.free:
-        return False
-    if isinstance(reference, sp.ConditionSet):
-        return False
-    return _same_set(reference, _solution_set(stmt, target)) is True
-
-
 # --------------------------------------------------------------------------
 # Whole-board check
 # --------------------------------------------------------------------------
@@ -713,8 +585,7 @@ def check_steps(problem: str | None, steps: list[tuple[int, str]], target: str |
     `steps` is [(line_number, sympy_text), ...] in board order; empty text means
     the line couldn't be transcribed as math. `task` is the tutor's label
     (differentiate, integrate, ode, ...); when it's empty the problem syntax
-    decides. Each parsed result includes `final_answer`, checked against the original
-    problem. Returns {"results": {line: {"verdict", "detail", "note", ...}}, "arrived": bool},
+    decides. Returns {"results": {line: {"verdict", "detail", "note"}}, "arrived": bool},
     where `detail` is for Claude only and `note` is safe to show the student.
     """
     from domains import check_domain, resolve_task
@@ -735,21 +606,11 @@ def check_steps(problem: str | None, steps: list[tuple[int, str]], target: str |
         except ParseError:
             prev = None
     original = prev
-    if tsym is None and original is not None and original.kind in ("eq", "ineq") and len(original.free) == 1:
-        tsym = next(iter(original.free))
-    try:
-        reference = _reference_solution(problem, tsym) if problem else None
-    except Exception:
-        reference = None
 
-<<<<<<< HEAD
-    arrived = False
-=======
     # Parse everything first so a run of single-root lines ("x = 0" beside or
     # under "x = 5") can be read together as one root list — students and the
     # handwriting reader both split a quadratic's answers across lines.
     groups: list[dict] = []  # {"lines": [...], "stmt": Statement|None, "err": str, "roots": (sym, [vals])|None}
->>>>>>> origin/main
     for line, text in steps:
         stmt: Statement | None = None
         err = ""
@@ -781,7 +642,6 @@ def check_steps(problem: str | None, steps: list[tuple[int, str]], target: str |
             if g["err"]:
                 prev = None  # can't chain through a line we couldn't read
             continue
-        cur = _answer_statement(cur, original, tsym, text)
         if prev is None:
             check = StepCheck("unknown")
         else:
@@ -789,19 +649,19 @@ def check_steps(problem: str | None, steps: list[tuple[int, str]], target: str |
                 check = compare(prev, cur, tsym)
             except Exception as exc:  # never let one odd line break the board
                 check = StepCheck("unknown", f"sympy error: {exc}")
-<<<<<<< HEAD
-        try:
-            final_answer = _is_final_answer(cur, original, tsym, text, reference)
-        except Exception:
-            final_answer = False
-        results[line] = {"verdict": check.verdict, "detail": check.detail, "note": check.note,
-                         "final_answer": final_answer}
-        arrived = arrived or final_answer
-=======
         for line in g["lines"]:
             results[line] = {"verdict": check.verdict, "detail": check.detail, "note": check.note}
->>>>>>> origin/main
         prev = cur
+        last = cur
 
-    arrived = arrived and not any(r["verdict"] == "invalid" for r in results.values())
+    arrived = False
+    if last is not None and tsym is not None and is_solved_form(last, tsym):
+        no_errors = all(r["verdict"] in ("valid", "caution") for r in results.values())
+        if original is not None and original.kind != "expr":
+            try:
+                arrived = _same_set(_solution_set(original, tsym), _solution_set(last, tsym)) is True
+            except Exception:
+                arrived = False
+        else:
+            arrived = no_errors
     return {"results": results, "arrived": arrived}

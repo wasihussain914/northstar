@@ -24,9 +24,7 @@ from verify import (
     StepCheck,
     _SYMBOLS,
     exprs_equal,
-    is_simplified_answer,
     parse_statement,
-    reference_value,
 )
 
 _TASKS = {
@@ -121,37 +119,36 @@ class _Judged:
     answer: bool = False
 
 
-def _walk(steps: list[tuple[int, str]], judge, *, require_simplified: bool = False) -> dict:
+def _walk(steps: list[tuple[int, str]], judge) -> dict:
     results: dict[int, dict] = {}
     prev: Statement | None = None
     any_bad = False
-    has_answer = False
+    last_answer = False
     for line, text in steps:
         if not str(text).strip():
             results[line] = _row("unknown")
             prev = None
+            last_answer = False
             continue
         try:
             judged = judge(str(text), prev)
         except ParseError as exc:
             results[line] = _row("unknown", str(exc))
             prev = None
+            last_answer = False
             continue
         except Exception as exc:
             results[line] = _row("unknown", f"sympy error: {exc}")
             prev = None
+            last_answer = False
             continue
         results[line] = _from_check(judged.check)
         if judged.check.verdict == "invalid":
             any_bad = True
         if judged.stmt is not None and judged.check.verdict != "unknown":
             prev = judged.stmt
-        final_answer = bool(judged.answer and judged.check.verdict == "valid")
-        if final_answer and require_simplified:
-            final_answer = is_simplified_answer(str(text))
-        results[line]["final_answer"] = final_answer
-        has_answer = has_answer or final_answer
-    return {"results": results, "arrived": has_answer and not any_bad}
+        last_answer = bool(judged.answer and judged.check.verdict == "valid")
+    return {"results": results, "arrived": last_answer and not any_bad}
 
 
 def _var_of(expr: sp.Basic, target: str | None) -> sp.Symbol | None:
@@ -198,7 +195,7 @@ def check_differentiate(problem: str, steps, target: str | None) -> dict | None:
     else:
         return None
     stages = _successive_diffs(deriv)
-    final = reference_value(deriv)
+    final = stages[-1]
     partials = stages[:-1]
 
     def judge(text: str, prev: Statement | None) -> _Judged:
@@ -215,7 +212,7 @@ def check_differentiate(problem: str, steps, target: str | None) -> dict | None:
         return _Judged(StepCheck("invalid", "not equal to the derivative",
                                  "This isn't the derivative of that function."), cur)
 
-    return _walk(steps, judge, require_simplified=True)
+    return _walk(steps, judge)
 
 
 def _is_definite(integ: sp.Integral) -> bool:
@@ -242,7 +239,7 @@ def check_integrate(problem: str, steps, target: str | None) -> dict | None:
         stmt = parse_statement(problem)
     except ParseError:
         return None
-    if stmt.kind == "expr" and stmt.lhs.has(sp.Integral):
+    if isinstance(stmt.lhs, sp.Integral):
         integ = stmt.lhs
     elif stmt.kind == "expr":
         var = _var_of(stmt.lhs, target)
@@ -252,34 +249,21 @@ def check_integrate(problem: str, steps, target: str | None) -> dict | None:
     else:
         return None
 
-    try:
-        final = reference_value(integ)
-    except Exception:
-        return None
-    indefinite_vars = {lim[0] for integral in integ.atoms(sp.Integral)
-                       for lim in integral.limits if len(lim) < 3 and lim[0] in integ.free_symbols}
-    definite = not indefinite_vars
-    integrand = integ.function if isinstance(integ, sp.Integral) else None
-    var = integ.limits[0][0] if isinstance(integ, sp.Integral) else None
-    inner_values = []
-    if isinstance(integ, sp.Integral):
-        partial = integrand
-        for lim in integ.limits[:-1]:
-            partial = reference_value(sp.Integral(partial, lim))
-            inner_values.append(partial)
-
-    def matches_reference(val: sp.Expr) -> bool:
-        if definite:
-            return exprs_equal(val, final) is True
-        # Indefinite answers may differ by a constant, but not by a function
-        # of any variable that still needed integration in the original task.
-        difference = val - final
-        return all(exprs_equal(sp.diff(difference, variable), sp.S.Zero) is True
-                   for variable in indefinite_vars)
+    var = integ.limits[0][0]
+    definite = _is_definite(integ)
+    values: list[sp.Expr] = []
+    node: sp.Basic = integ
+    while isinstance(node, sp.Integral):
+        try:
+            values.append(node.doit())
+        except Exception:
+            break
+        node = node.function
+    final = values[0] if values else None
+    inner_values = values[1:]
+    integrand = integ.function
 
     def is_antiderivative(val: sp.Expr) -> bool:
-        if var is None or integrand is None:
-            return False
         try:
             return exprs_equal(sp.diff(val, var), integrand) is True
         except Exception:
@@ -320,14 +304,13 @@ def check_integrate(problem: str, steps, target: str | None) -> dict | None:
         val = _expr_value(cur)
         if val is None:
             return _Judged(StepCheck("unknown"), cur)
-        if matches_reference(val):
-            constants = {sym for sym in val.free_symbols - integ.free_symbols
-                         if re.fullmatch(r"C\d*", str(sym))}
-            finished = not final.has(sp.Integral) and (definite or bool(constants))
-            return _Judged(StepCheck("valid"), cur, finished)
+        if definite and final is not None and exprs_equal(val, final) is True:
+            return _Judged(StepCheck("valid"), cur, True)
+        if not definite and is_antiderivative(val):
+            return _Judged(StepCheck("valid"), cur, True)
         if any(exprs_equal(val, piece) is True for piece in inner_values):
             return _Judged(StepCheck("valid"), cur, False)
-        if integrand is not None and exprs_equal(val, integrand) is True:
+        if exprs_equal(val, integrand) is True or (isinstance(node, sp.Expr) and exprs_equal(val, node) is True):
             return _Judged(StepCheck("valid"), cur, False)
         if definite and is_antiderivative(val):
             return _Judged(StepCheck("valid"), cur, False)
@@ -337,7 +320,7 @@ def check_integrate(problem: str, steps, target: str | None) -> dict | None:
                 else "Differentiating this doesn't give back the integrand.")
         return _Judged(StepCheck("invalid", "integral step does not match", note), cur)
 
-    return _walk(steps, judge, require_simplified=True)
+    return _walk(steps, judge)
 
 
 def check_limit(problem: str, steps, target: str | None) -> dict | None:
@@ -349,7 +332,7 @@ def check_limit(problem: str, steps, target: str | None) -> dict | None:
         return None
     inside = stmt.lhs.args[0]
     try:
-        final = reference_value(stmt.lhs)
+        final = stmt.lhs.doit()
     except Exception:
         return None
 
@@ -367,7 +350,7 @@ def check_limit(problem: str, steps, target: str | None) -> dict | None:
         return _Judged(StepCheck("invalid", "not the limit value",
                                  "This isn't the value of that limit."), cur)
 
-    return _walk(steps, judge, require_simplified=True)
+    return _walk(steps, judge)
 
 
 def check_sum(problem: str, steps, target: str | None) -> dict | None:
@@ -378,7 +361,7 @@ def check_sum(problem: str, steps, target: str | None) -> dict | None:
     if not isinstance(stmt.lhs, sp.Sum):
         return None
     try:
-        final = reference_value(stmt.lhs)
+        final = stmt.lhs.doit()
     except Exception:
         return None
     term = stmt.lhs.function
@@ -397,7 +380,7 @@ def check_sum(problem: str, steps, target: str | None) -> dict | None:
         return _Judged(StepCheck("invalid", "not the closed form",
                                  "This isn't a closed form of that sum."), cur)
 
-    return _walk(steps, judge, require_simplified=True)
+    return _walk(steps, judge)
 
 
 # --------------------------------------------------------------------------
@@ -435,9 +418,7 @@ def _solution_of(stmt: Statement, func) -> sp.Expr | None:
     return None
 
 
-def _conditions_hold(sol: sp.Expr, conds: list[str], indeps: tuple, func,
-                     constants: list[sp.Symbol] | None = None) -> bool:
-    equations = []
+def _conditions_hold(sol: sp.Expr, conds: list[str], indeps: tuple, func) -> bool:
     for cond in conds:
         try:
             stmt = parse_statement(cond)
@@ -451,15 +432,7 @@ def _conditions_hold(sol: sp.Expr, conds: list[str], indeps: tuple, func,
             got = sol.subs(dict(zip(indeps, stmt.lhs.args)))
         except Exception:
             return False
-        if exprs_equal(got, stmt.rhs) is True:
-            continue
-        if not constants:
-            return False
-        equations.append(got - stmt.rhs)
-    if equations:
-        try:
-            return bool(sp.solve(equations, constants, dict=True))
-        except Exception:
+        if exprs_equal(got, stmt.rhs) is not True:
             return False
     return True
 
@@ -496,10 +469,6 @@ def check_ode(problem: str, steps, target: str | None) -> dict | None:
             return _Judged(StepCheck("invalid", "residual is not zero",
                                      "This doesn't satisfy the differential equation."), cur)
         if not _conditions_hold(sol, conds, indeps, applied.func):
-            constants = _constants(sol, indeps, residual)
-            if constants and _conditions_hold(sol, conds, indeps, applied.func, constants):
-                # A solution family is useful work before fitting the conditions.
-                return _Judged(StepCheck("valid"), cur, False)
             return _Judged(StepCheck("invalid", "initial condition missed",
                                      "This solves the equation but misses a condition."), cur)
         if conds or len(_constants(sol, indeps, residual)) >= order:

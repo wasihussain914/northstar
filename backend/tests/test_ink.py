@@ -17,11 +17,6 @@ def test_schemas_require_margin_ink() -> None:
     assert "jot in red" in tutor.HINT_RULES
 
 
-def test_explain_schema_requires_fix_line() -> None:
-    assert "fix_line" in tutor.EXPLAIN_SCHEMA["required"]
-    assert "fix_line" in tutor.EXPLAIN_SCHEMA["properties"]
-
-
 def test_fake_tutor_writes_short_margin_notes() -> None:
     board = asyncio.run(fake_tutor.read_board(
         "Solve 2(x - 3) + 4 = 10", {1: "2*x - 6 + 4 = 10"}, [1]))
@@ -30,10 +25,6 @@ def test_fake_tutor_writes_short_margin_notes() -> None:
     explained = asyncio.run(fake_tutor.explain_line("p", [], 2, "detail", "note"))
     assert explained["hint_ink"] == ["check each term", "carry it carefully", "rewrite this step"]
     assert all(len(phrase.split()) <= 4 for phrase in explained["hint_ink"])
-    assert explained["fix_line"] == "2x - 6 + 4 = 10"
-    prev = asyncio.run(fake_tutor.explain_line(
-        "p", [{"line": 1, "latex": "2(x - 3) + 4 = 10"}], 2, "detail", "note"))
-    assert prev["fix_line"] == "2(x - 3) + 4 = 10"
 
 
 def test_explain_line_asks_for_margin_ink(monkeypatch) -> None:
@@ -42,14 +33,11 @@ def test_explain_line_asks_for_margin_ink(monkeypatch) -> None:
     async def fake(prompt, schema, max_tokens=8000):
         seen["prompt"] = prompt
         seen["schema"] = schema
-        return {"hints": ["look"], "hint_ink": ["check the sign"],
-                "fix_line": "2x = 4", "spoken_nudge": "Recalculating."}
+        return {"hints": ["look"], "hint_ink": ["check the sign"], "spoken_nudge": "Recalculating."}
 
     monkeypatch.setattr(tutor, "_structured", fake)
     out = asyncio.run(tutor.explain_line("2x = 4", [{"line": 1, "latex": "2x = 4"}], 1, "diff", "note"))
     assert out["hint_ink"] == ["check the sign"]
-    assert out["fix_line"] == "2x = 4"
     assert seen["schema"] is tutor.EXPLAIN_SCHEMA
     assert "hint_ink" in seen["prompt"]
-    assert "fix_line" in seen["prompt"]
     assert "No diagram" in seen["prompt"]

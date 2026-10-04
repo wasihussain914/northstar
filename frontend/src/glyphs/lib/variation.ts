@@ -24,9 +24,6 @@ export const DEFAULT_STROKE_WIDTH = 2.5;
 /** Width of a space character as a fraction of fontHeight */
 export const SPACE_WIDTH_FACTOR = 0.38;
 
-/** Width of a space next to a word (a run of 2+ letters), as a fraction of fontHeight */
-export const WORD_SPACE_WIDTH_FACTOR = 0.8;
-
 /** Resolution of the ink mask in cells per fontHeight */
 export const MASK_CELLS_PER_HEIGHT = 32;
 
