@@ -1,5 +1,9 @@
 <img width="2172" height="724" alt="EED5AB45-0FA7-475D-87C9-C79B46261CC8" src="https://github.com/user-attachments/assets/257002b2-9887-40da-baff-aae21b1c7586" />
 
+# 🏆 1st Place — Best Software @ BigRed//Hacks 2026 (Cornell University)
+
+> Winner of **Best Overall Software** out of 58 teams at Cornell's oldest large-scale student hackathon — and the most-liked project on Devpost.
+
 ## [▶️ Demo](https://youtu.be/56DcrK1BDGQ)
 
 ### A GPS for solving math. You do the driving.
