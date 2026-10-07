@@ -206,6 +206,9 @@ asin, acos, atan, sec, csc, cot, sinh, cosh, tanh, pi.
 another word in the student's language — are a SOLUTION LIST, never a product: sympy is "x = 0 or x = 5".
 - Calculus: diff(f, x), diff(f, x, 2), diff(f, x, y), integrate(f, x), integrate(f, x, a, b), limit(f, x, a), \
 limleft(f, x, a), limright(f, x, a), grad(f, x, y).
+- Coding theory: binary words transcribe verbatim ("C = {00000, 11111}", "C perp = {00000, 11000, ...}"), \
+never as numbers; a parity-check matrix stays "H = [1 1 1 1 1]" (rows of 0/1). A problem defining a code \
+transcribes its word set into problem_sympy exactly.
 - Substitution / by-parts bookkeeping keeps its differentials literally: "u = x^2", "du = 2*x*dx", \
 "dv = exp(x)*dx" (du, dv, dx as plain names). Never drop the dx, and never rewrite these as diff(...).
 - Sums: summation(term, k, 1, n).

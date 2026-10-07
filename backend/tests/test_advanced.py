@@ -327,3 +327,32 @@ def test_dv_without_v_on_the_board_is_a_valid_choice():
     bad, _ = line_verdicts("integrate(x^2*exp(x), x)",
                            ["v = e^x", "dv = x e^x dx"])
     assert bad[2] == "invalid"
+
+
+# --- coding theory: dual codes over GF(2) --------------------------------
+
+def test_dual_code_listing_and_parity_check_are_proven():
+    prob = "C = {00000, 11111}"
+    full = ("C perp = {00000, 11000, 10100, 10010, 10001, 01100, 01010, 01001, "
+            "00110, 00101, 00011, 11110, 11101, 11011, 10111, 01111}")
+    out = check_steps(prob, [(1, "C = {00000, 11111}"), (2, full), (3, "16 words total"),
+                             (4, "H = [1 1 1 1 1]")], None)
+    v = {k: r["verdict"] for k, r in out["results"].items()}
+    assert v == {1: "valid", 2: "valid", 3: "valid", 4: "valid"}, v
+    assert out["arrived"] is True
+
+
+def test_dual_code_mistakes_are_flagged():
+    prob = "C = {00000, 11111}"
+    # 10000 has odd overlap with 11111: not in the dual.
+    bad, _ = line_verdicts(prob, ["C perp contains 10000"])
+    assert bad == {1: "invalid"}
+    # wrong count
+    bad, _ = line_verdicts(prob, ["8 words total"])
+    assert bad == {1: "invalid"}
+    # H with a row outside span(C)
+    bad, _ = line_verdicts(prob, ["H = [1 1 0 0 0]"])
+    assert bad == {1: "invalid"}
+    # prose stays unjudged (AI's job)
+    unk, _ = line_verdicts(prob, ["the dual is all even weight words"])
+    assert unk == {1: "unknown"}

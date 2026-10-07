@@ -388,7 +388,14 @@ async def check(req: CheckRequest) -> dict:
                                                               "kind": k.kind, "ai_verdict": k.ai_verdict})
         except tutor.TutorError as exc:
             raise HTTPException(502, str(exc))
-        sym = await sympy_pool.check(board.get("problem_sympy", ""), line_steps(board),
+        # The model sometimes returns an empty transcription for text it finds
+        # odd (binary words, prose problems). Typed lines are known verbatim,
+        # and the raw problem beats no problem — the checker regexes raw text.
+        for l in board.get("lines", []):
+            t = typed.get(l["line"])
+            if t and not str(l.get("sympy", "")).strip():
+                l["sympy"] = t
+        sym = await sympy_pool.check(board.get("problem_sympy", "") or req.problem, line_steps(board),
                                      board.get("target_variable", ""), board.get("task") or "")
     read_ms = (time.perf_counter() - started) * 1000
 

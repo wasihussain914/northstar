@@ -41,6 +41,11 @@ def infer_task(problem: str) -> str:
     raw = problem.strip()
     compact = re.sub(r"\s+", "", raw)
     lower = compact.lower()
+    if re.search(r"\{[01]+(,[01]+)+\}", compact) and (
+            re.fullmatch(r"[A-Za-z](perp|\^?⊥)?=\{[01]+(,[01]+)+\}", compact)
+            or "dual" in lower or "⊥" in raw or "perp" in lower or "paritycheck" in lower
+            or "parity-check" in raw.lower()):
+        return "dualcode"
     if lower.startswith("pigeonhole("):
         return "pigeonhole"
     if lower.startswith("balance(") or raw.lower().startswith("balance "):
@@ -95,6 +100,7 @@ def check_domain(task: str, problem: str, steps: list[tuple[int, str]], target: 
         "prove": check_prove,
         "pigeonhole": check_pigeonhole,
         "balance": check_balance,
+        "dualcode": check_dualcode,
         "physics": check_physics,
     }.get(task)
     if handler is None:
@@ -1186,5 +1192,82 @@ def check_balance(problem: str, steps, target: str | None) -> dict | None:
             return _Judged(StepCheck("valid"), answer=True)
         return _Judged(StepCheck("invalid", "atom counts differ",
                                  "The atoms on the two sides don't match."))
+
+    return _walk(steps, judge)
+
+
+# --------------------------------------------------------------------------
+# Coding theory: dual codes over GF(2)
+# --------------------------------------------------------------------------
+
+def _gf2_span(words: list[int]) -> set[int]:
+    span = {0}
+    for w in words:
+        span |= {s ^ w for s in span}
+    return span
+
+
+def check_dualcode(problem: str, steps, target: str | None) -> dict | None:
+    """The problem gives a binary code C = {w1, w2, ...}; student work lists
+    words of the dual and/or a parity-check matrix. All of it is provable:
+    membership is a GF(2) dot product, H is checked by row space."""
+    m = re.search(r"\{\s*([01]+(?:\s*,\s*[01]+)+)\s*\}", problem)
+    if not m:
+        return None
+    given = [w.strip() for w in m.group(1).split(",")]
+    n = len(given[0])
+    if any(len(w) != n for w in given) or not (1 <= n <= 14):
+        return None
+    C = [int(w, 2) for w in given]
+    parity = lambda x: bin(x).count("1") & 1
+    dual = {v for v in range(1 << n) if all(parity(v & c) == 0 for c in C)}
+    span_C = _gf2_span(C)
+    fmt = lambda v: format(v, f"0{n}b")
+
+    def words_in(text: str) -> list[str]:
+        return re.findall(rf"\b[01]{{{n}}}\b", text)
+
+    def judge(text: str, prev) -> _Judged:
+        listed = words_in(text)
+        rows_m = re.search(r"[Hh]\s*=", text)
+        if rows_m:
+            # Rows may be spaced ("[1 1 1 1 1]"): take every 0/1 after the "=",
+            # n digits per row.
+            digits = re.findall(r"[01]", text[rows_m.end():])
+            if not digits or len(digits) % n:
+                return _Judged(StepCheck("unknown"))
+            rows = [int("".join(digits[i:i + n]), 2) for i in range(0, len(digits), n)]
+            if any(r not in span_C for r in rows):
+                bad = next(fmt(r) for r in rows if r not in span_C)
+                return _Judged(StepCheck("invalid", f"row {bad} is not orthogonal to the dual",
+                                         f"Row {bad} doesn't annihilate every word of the dual."))
+            need = n - (len(dual).bit_length() - 1)
+            if len(_gf2_span(rows)) != (1 << need):
+                return _Judged(StepCheck("invalid", "H has the wrong rank",
+                                         f"A parity-check matrix here needs rank {need}."))
+            return _Judged(StepCheck("valid"), None, True)
+        if listed:
+            got = [int(w, 2) for w in listed]
+            if set(got) == set(C) and len(listed) == len(C):
+                return _Judged(StepCheck("valid"))  # restating the given code
+            if all(w in set(C) for w in got):
+                # Citing the given words in prose ("all v with v . 11111 = 0")
+                # is a definition, not a membership claim.
+                return _Judged(StepCheck("unknown"))
+            outside = [w for w in got if w not in dual]
+            if outside:
+                return _Judged(StepCheck("invalid",
+                                         f"{fmt(outside[0])} is not orthogonal to every word of C",
+                                         f"Check {fmt(outside[0])}: its dot product with a word of C is 1, not 0."))
+            full = set(got) == dual
+            return _Judged(StepCheck("valid"), None, full)
+        cnt = re.search(r"(\d+)\s*(?:total\s*)?words|words?\s*[:=]?\s*(\d+)\b", text, re.I)
+        if cnt:
+            k = int(cnt.group(1) or cnt.group(2))
+            if k == len(dual):
+                return _Judged(StepCheck("valid"))
+            return _Judged(StepCheck("invalid", f"the dual has {len(dual)} words, not {k}",
+                                     "Recount the words of the dual."))
+        return _Judged(StepCheck("unknown"))
 
     return _walk(steps, judge)
